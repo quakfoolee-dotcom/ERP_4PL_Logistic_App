@@ -128,7 +128,7 @@ export default function App() {
       case "tracking": return <LiveTracking />;
       case "pod": return <PODManagement />;
       case "profiles": return <DriverProfiles />;
-      case "quotes": return <PartnerQuotes />;
+      case "quotes": return <PartnerQuotes language={language} />;
       case "reconcile": return <ReconciliationView language={language} />;
       case "compliance": return <ComplianceView />;
       case "settings": return <SettingsView />;
