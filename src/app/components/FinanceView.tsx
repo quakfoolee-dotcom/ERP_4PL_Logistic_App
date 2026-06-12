@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { FileText, CheckCircle2, Clock, AlertCircle, Download, Send } from "lucide-react";
+import { FileText, CheckCircle2, Clock, AlertCircle, Download, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 // Real container invoice numbers from 2026 dispatch sheet (CAD)
@@ -47,6 +47,7 @@ const invoiceStatus: Record<string, { bg: string; color: string; icon: React.Rea
 
 export function FinanceView() {
   const [invoiceStatuses, setInvoiceStatuses] = useState<Record<string, string>>({});
+  const [selectedInvoice, setSelectedInvoice] = useState<typeof invoices[0] | null>(null);
 
   function getStatus(id: string, def: string) {
     return invoiceStatuses[id] ?? def;
@@ -78,6 +79,18 @@ export function FinanceView() {
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      {selectedInvoice && (
+        <InvoiceDetailModal
+          invoice={selectedInvoice}
+          status={getStatus(selectedInvoice.id, selectedInvoice.status)}
+          onClose={() => setSelectedInvoice(null)}
+          onIssue={() => {
+            issue(selectedInvoice.id);
+            setSelectedInvoice(null);
+            toast.success(`Invoice ${selectedInvoice.id} issued`, { description: `${selectedInvoice.customer} · ${selectedInvoice.total} issued` });
+          }}
+        />
+      )}
       {/* KPI row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
         {[
@@ -180,7 +193,7 @@ export function FinanceView() {
               return (
                 <tr key={i} className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
                   style={{ borderColor: "var(--border)" }}
-                  onClick={() => toast.info(`Invoice ${inv.id} — ${inv.customer}`, { description: `${inv.total} incl. HST · Due: ${inv.due} · Status: ${currentStatus}` })}>
+                  onClick={() => setSelectedInvoice(inv)}>
                   <td className="px-3 py-2.5" style={{ fontSize: 11, fontFamily: "monospace", color: "var(--primary)", fontWeight: 600 }}>{inv.id}</td>
                   <td className="px-3 py-2.5 text-xs" style={{ fontWeight: 500 }}>{inv.customer}</td>
                   <td className="px-3 py-2.5 text-xs" style={{ fontFamily: "monospace" }}>{inv.period}</td>
@@ -206,7 +219,7 @@ export function FinanceView() {
                         Issue Invoice
                       </button>
                     ) : (
-                      <button onClick={(e) => { e.stopPropagation(); toast.info(`Invoice ${inv.id}`, { description: `${inv.customer} · ${inv.total} · ${currentStatus}` }); }}
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
                         className="text-xs px-2 py-0.5 rounded hover:bg-muted transition-colors"
                         style={{ background: "var(--muted)", color: "var(--muted-foreground)", fontWeight: 500 }}>
                         View Detail
@@ -218,6 +231,50 @@ export function FinanceView() {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function InvoiceDetailModal({ invoice, status, onClose, onIssue }: { invoice: typeof invoices[0]; status: string; onClose: () => void; onIssue: () => void }) {
+  const st = invoiceStatus[status];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace", color: "var(--primary)" }}>{invoice.id}</div>
+            <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>Invoice Detail · CAD / 13% HST</div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-muted" style={{ color: "var(--muted-foreground)" }}><X size={16} /></button>
+        </div>
+        <div className="space-y-2 px-5 py-4">
+          {[
+            ["Customer / Container", invoice.customer],
+            ["Period", invoice.period],
+            ["Runs", String(invoice.orders)],
+            ["Pre-tax", invoice.amount],
+            ["HST 13%", invoice.tax],
+            ["Total", invoice.total],
+            ["Due Date", invoice.due],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between border-b py-2 text-xs" style={{ borderColor: "var(--border)" }}>
+              <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
+              <span style={{ fontWeight: 600, fontFamily: value.startsWith("CAD") ? "monospace" : "inherit" }}>{value}</span>
+            </div>
+          ))}
+          <div className="flex justify-between border-b py-2 text-xs" style={{ borderColor: "var(--border)" }}>
+            <span style={{ color: "var(--muted-foreground)" }}>Status</span>
+            <span className="flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: st?.bg, color: st?.color, fontWeight: 600 }}>{st?.icon}{status}</span>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
+          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-xs hover:bg-muted" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>Close</button>
+          {status === "待开具" && (
+            <button onClick={onIssue} className="rounded-lg px-4 py-2 text-xs" style={{ background: "var(--primary)", color: "white", fontWeight: 600 }}>Issue Invoice</button>
+          )}
+        </div>
       </div>
     </div>
   );

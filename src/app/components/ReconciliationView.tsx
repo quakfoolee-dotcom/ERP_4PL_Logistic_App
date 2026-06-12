@@ -55,6 +55,10 @@ export function ReconciliationView() {
     setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:undefined}:r));
     toast.success(`Dispute resolved — ${id} matched`);
   }
+  function escalateRow(id: string) {
+    setRows(p=>p.map(r=>r.id===id?{...r,status:"disputed",note:`${r.note || "Dispute"} · Escalated to management`}:r));
+    toast.warning(`${id} escalated`, { description: "Row remains in disputed status with escalation note." });
+  }
   async function writeOffRow(id: string) {
     const ok = await confirmDialog("Write Off Reconciliation", { message: `Write off ${id}? This marks it as matched with a zero-cost adjustment.` });
     if (!ok) return;
@@ -151,7 +155,7 @@ export function ReconciliationView() {
                       </>}
                       {r.status==="disputed" && <>
                         <button onClick={()=>resolveRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Resolve</button>
-                        <button onClick={()=>toast.info("Escalated to management")} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Escalate</button>
+                        <button onClick={()=>escalateRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Escalate</button>
                       </>}
                       {r.status==="matched" && <span style={{fontSize:11,color:"#047857"}}>✓</span>}
                     </div>

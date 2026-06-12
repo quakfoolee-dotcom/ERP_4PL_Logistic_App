@@ -1,7 +1,6 @@
 import { Search, Bell, RefreshCw, Download, Plus, Filter, Calendar } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { NotificationPanel } from "./NotificationPanel";
-import { toast } from "sonner";
 
 interface TopBarProps {
   title: string;
@@ -10,11 +9,14 @@ interface TopBarProps {
   addLabel?: string;
   onSearch?: (q: string) => void;
   onExport?: () => void;
+  activeStatusFilter?: string;
+  onFilterStatus?: (status: string) => void;
 }
 
-export function TopBar({ title, titleEn, onAdd, addLabel = "新建订单", onSearch, onExport }: TopBarProps) {
+export function TopBar({ title, titleEn, onAdd, addLabel = "新建订单", onSearch, onExport, activeStatusFilter = "全部", onFilterStatus }: TopBarProps) {
   const [searchVal, setSearchVal] = useState("");
   const [showNotif, setShowNotif] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activePeriod, setActivePeriod] = useState("Apr 2026");
 
@@ -91,12 +93,25 @@ export function TopBar({ title, titleEn, onAdd, addLabel = "新建订单", onSea
           title="导出数据">
           <Download size={14} />
         </button>
-        <button onClick={() => toast.info("Advanced Filter", { description: "Filter by date range, customer, driver, route, or amount. Use the period selector and search bar for quick filtering." })}
-          className="p-1.5 rounded-lg border transition-colors hover:bg-muted"
-          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-          title="筛选">
-          <Filter size={14} />
-        </button>
+        <div className="relative">
+          <button onClick={() => setShowFilter((value) => !value)}
+            className="p-1.5 rounded-lg border transition-colors hover:bg-muted"
+            style={{ borderColor: activeStatusFilter !== "全部" ? "var(--primary)" : "var(--border)", color: activeStatusFilter !== "全部" ? "var(--primary)" : "var(--muted-foreground)" }}
+            title="筛选">
+            <Filter size={14} />
+          </button>
+          {showFilter && (
+            <div className="absolute right-0 top-10 z-50 w-44 rounded-xl border bg-card p-2 shadow-xl" style={{ borderColor: "var(--border)" }}>
+              {["全部", "运输中", "已完成", "待派送", "异常"].map((status) => (
+                <button key={status} onClick={() => { onFilterStatus?.(status); setShowFilter(false); }}
+                  className="block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-muted"
+                  style={{ background: activeStatusFilter === status ? "var(--secondary)" : "transparent", color: activeStatusFilter === status ? "var(--primary)" : "var(--foreground)", fontWeight: activeStatusFilter === status ? 600 : 400 }}>
+                  {status}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Notifications */}
         <div className="relative">

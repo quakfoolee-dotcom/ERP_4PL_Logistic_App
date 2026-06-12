@@ -24,6 +24,8 @@ interface Order {
 interface OrderDetailDrawerProps {
   order: Order;
   onClose: () => void;
+  onEdit?: () => void;
+  onUpdate?: (order: Order) => void;
 }
 
 const statusStyle: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
@@ -41,7 +43,7 @@ const timeline = [
   { time: "预计 2025-07-02", event: "到达目的地", detail: "客户签收确认POD", done: false },
 ];
 
-export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
+export function OrderDetailDrawer({ order, onClose, onEdit, onUpdate }: OrderDetailDrawerProps) {
   const st = statusStyle[order.status] || statusStyle["运输中"];
   const origin = order.origin || (order.route ? order.route.split(" → ")[0] : "—");
   const dest = order.dest || (order.route ? order.route.split(" → ")[1] : "—");
@@ -146,24 +148,36 @@ export function OrderDetailDrawer({ order, onClose }: OrderDetailDrawerProps) {
 
         {/* Footer actions */}
         <div className="flex gap-2 px-5 py-4 border-t" style={{ borderColor: "var(--border)" }}>
-          <button onClick={() => toast.info(`Edit Order ${order.id}`, { description: `Editing: ${order.customer} · ${order.amount} · Driver: ${order.driver}` })} className="flex-1 py-2 rounded-lg border text-xs transition-colors hover:bg-muted"
+          <button onClick={onEdit} className="flex-1 py-2 rounded-lg border text-xs transition-colors hover:bg-muted"
             style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
             编辑订单
           </button>
           {order.status === "异常" && (
-            <button onClick={() => toast.warning(`Exception Handling — ${order.id}`, { description: `Customer: ${order.customer} · POD: ${order.pod} · Initiating dispute resolution workflow.` })} className="flex-1 py-2 rounded-lg text-xs"
+            <button onClick={() => {
+              const updated = { ...order, status: "运输中", pod: "待确认" };
+              onUpdate?.(updated);
+              toast.success(`Exception reopened — ${order.id}`, { description: "Status changed to In Transit for follow-up." });
+            }} className="flex-1 py-2 rounded-lg text-xs"
               style={{ background: "#EF4444", color: "white", fontWeight: 500 }}>
               处理异常
             </button>
           )}
           {order.status === "运输中" && (
-            <button onClick={() => toast.info(`Live Tracking — ${order.id}`, { description: `Driver: ${order.driver} · ETA: ${order.eta || "—"} · Destination: ${dest}` })} className="flex-1 py-2 rounded-lg text-xs"
+            <button onClick={() => {
+              const updated = { ...order, status: "已完成", pod: "已签收" };
+              onUpdate?.(updated);
+              toast.success(`Delivery confirmed — ${order.id}`, { description: "Order marked completed and POD signed." });
+            }} className="flex-1 py-2 rounded-lg text-xs"
               style={{ background: "var(--primary)", color: "white", fontWeight: 500 }}>
-              实时追踪
+              确认到达
             </button>
           )}
           {order.status === "待派送" && (
-            <button onClick={() => toast.success(`Dispatch Confirmed — ${order.id}`, { description: `Driver: ${order.driver} · Route: ${origin} → ${dest}` })} className="flex-1 py-2 rounded-lg text-xs"
+            <button onClick={() => {
+              const updated = { ...order, status: "运输中" };
+              onUpdate?.(updated);
+              toast.success(`Dispatch Confirmed — ${order.id}`, { description: `Driver: ${order.driver} · Route: ${origin} → ${dest}` });
+            }} className="flex-1 py-2 rounded-lg text-xs"
               style={{ background: "#10B981", color: "white", fontWeight: 500 }}>
               确认派车
             </button>

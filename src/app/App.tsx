@@ -53,6 +53,8 @@ function PlaceholderView({ title, titleEn }: { title: string; titleEn: string })
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [globalOrderSearch, setGlobalOrderSearch] = useState("");
+  const [globalOrderStatus, setGlobalOrderStatus] = useState("全部");
   const [orders, setOrders] = useState<TransportOrder[]>(() => {
     try {
       const saved = window.localStorage.getItem("erp4pl.transportOrders");
@@ -86,10 +88,18 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function updateOrder(updated: TransportOrder) {
+    setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+  }
+
+  function addOrder(order: TransportOrder) {
+    setOrders((current) => [order, ...current]);
+  }
+
   function renderContent() {
     switch (activePage) {
       case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} />;
-      case "orders": return <TransportOrders orders={orders} />;
+      case "orders": return <TransportOrders orders={orders} onUpdateOrder={updateOrder} onAddOrder={addOrder} externalSearch={globalOrderSearch} externalStatus={globalOrderStatus} />;
       case "ar":
       case "ap":
       case "transfer": return <FinanceView />;
@@ -120,6 +130,12 @@ export default function App() {
           addLabel={page.addLabel}
           onAdd={page.addLabel ? () => setShowNewOrder(true) : undefined}
           onExport={exportOrders}
+          onSearch={setGlobalOrderSearch}
+          activeStatusFilter={globalOrderStatus}
+          onFilterStatus={(status) => {
+            setGlobalOrderStatus(status);
+            setActivePage("orders");
+          }}
         />
         <div className="flex-1 overflow-hidden flex flex-col" style={{ background: "var(--background)" }}>
           {renderContent()}
@@ -130,7 +146,7 @@ export default function App() {
         <NewOrderModal
           onClose={() => setShowNewOrder(false)}
           onSubmit={(order) => {
-            setOrders((prev) => [order, ...prev]);
+            addOrder(order);
             setShowNewOrder(false);
             setActivePage("orders");
           }}

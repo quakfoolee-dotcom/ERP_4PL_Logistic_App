@@ -73,6 +73,21 @@ export function DriverProfiles() {
     setDocs(p=>p.map(d=>d.driver===driverId&&d.type===type?{...d,expiry:newExpiry,status:"valid"}:d));
     toast.success(`${type} renewed`, { description: `New expiry: ${newExpiry}` });
   }
+  async function addDocument() {
+    const driver = await promptDialog("Add Driver Document", { message: "Driver ID", defaultValue: selectedId || "AF" });
+    if (!driver) return;
+    const type = await promptDialog("Document Type", { message: "Examples: CDL (A), CVOR, Insurance", defaultValue: "CVOR" });
+    if (!type) return;
+    const expiry = await promptDialog("Expiry Date", { message: "YYYY-MM-DD", defaultValue: "2027-06-01" });
+    if (!expiry) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+      toast.error("Invalid expiry date", { description: "Use YYYY-MM-DD." });
+      return;
+    }
+    setDocs(p=>[{driver:driver.toUpperCase(),type,expiry,status:"valid"},...p]);
+    setSelectedId(driver.toUpperCase());
+    toast.success("Driver document added", { description: `${driver.toUpperCase()} · ${type}` });
+  }
   function changeStatus(id: string, status: Driver["status"], label: string) {
     setDrivers(p=>p.map(d=>d.id===id?{...d,status,statusLabel:label}:d));
     toast.info(`${id} status → ${label}`);
@@ -147,7 +162,7 @@ export function DriverProfiles() {
           </div>
           <div className="flex gap-2">
             {selectedId && <button onClick={()=>setSelectedId(null)} style={{fontSize:11,color:"var(--primary)",border:"1px solid var(--primary)",borderRadius:6,padding:"3px 10px",background:"var(--card)",cursor:"pointer"}}>Show All</button>}
-            <button onClick={()=>toast.info("Add document flow — connect to document storage")} className="flex items-center gap-1" style={{fontSize:11,color:"white",border:"none",borderRadius:6,padding:"4px 10px",background:"var(--primary)",cursor:"pointer",fontWeight:600}}><Plus size={12}/>Add Doc</button>
+            <button onClick={addDocument} className="flex items-center gap-1" style={{fontSize:11,color:"white",border:"none",borderRadius:6,padding:"4px 10px",background:"var(--primary)",cursor:"pointer",fontWeight:600}}><Plus size={12}/>Add Doc</button>
           </div>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
