@@ -17,7 +17,7 @@ import { ReconciliationView } from "./components/ReconciliationView";
 import { ComplianceView } from "./components/ComplianceView";
 import { SettingsView } from "./components/SettingsView";
 import { initialTransportOrders, type TransportOrder } from "./data/transportOrders";
-import { type AppLanguage } from "./i18n";
+import { installLanguageDomSanitizer, type AppLanguage } from "./i18n";
 
 const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: string; addLabelEn?: string }> = {
   dashboard: { title: "运营控制台", titleEn: "Operations Dashboard" },
@@ -83,6 +83,7 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("erp4pl.language", language);
     document.documentElement.lang = language === "en" ? "en" : "zh-Hans";
+    return installLanguageDomSanitizer(language);
   }, [language]);
 
   function exportOrders() {
