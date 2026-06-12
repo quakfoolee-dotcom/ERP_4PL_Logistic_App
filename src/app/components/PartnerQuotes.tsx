@@ -439,19 +439,31 @@ export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
           )}
 
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
                 <tr>
                   {(language === "en"
-                    ? ["Item", "Service", "Zone / Codes", "Basis", "Rate", "Minimum", "Includes", "Status", "Notes", "Actions"]
-                    : ["项目", "服务", "区域/代码", "单位", "费率", "最低收费", "包含", "状态", "备注", "操作"]
+                    ? ["Item", "Service", "Zone / Codes", "Basis", "Rate", "Minimum", "Includes", "Status", "Notes"]
+                    : ["项目", "服务", "区域/代码", "单位", "费率", "最低收费", "包含", "状态", "备注"]
                   ).map((header) => <th key={header} style={thStyle}>{header}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {rateItems.map((item) => (
                   <tr key={item.id} style={{ background: item.status === "inactive" ? "var(--muted)" : "var(--card)", opacity: item.status === "inactive" ? 0.72 : 1 }}>
-                    <td style={{ ...tdStyle, fontWeight: 700, color: "var(--foreground)" }}>{displayName(item)}</td>
+                    <td style={{ ...tdStyle, minWidth: 126 }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span style={{ fontWeight: 700, color: "var(--foreground)" }}>{displayName(item)}</span>
+                        <button
+                          onClick={() => startEditItem(item)}
+                          title={pick(language, "编辑", "Edit")}
+                          className="inline-flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+                          style={{ border: "1px solid var(--border)", background: "var(--card)", color: "var(--muted-foreground)", cursor: "pointer", width: 26, height: 24, flexShrink: 0 }}
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                      </div>
+                    </td>
                     <td style={tdStyle}>{displayService(item)}</td>
                     <td style={tdStyle}>
                       <div style={{ fontWeight: 600, color: "var(--foreground)" }}>{item.zone}</div>
@@ -472,11 +484,6 @@ export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
                       </select>
                     </td>
                     <td style={{ ...tdStyle, color: "var(--muted-foreground)", maxWidth: 220 }}>{displayNotes(item)}</td>
-                    <td style={tdStyle}>
-                      <button onClick={() => startEditItem(item)} title={pick(language, "编辑", "Edit")} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs hover:bg-muted transition-colors" style={{ border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)", cursor: "pointer" }}>
-                        <Edit2 size={12} /> {pick(language, "编辑", "Edit")}
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
