@@ -57,8 +57,8 @@ function buildOrderTimeline(order: Order): TimelineStep[] {
   const isInTransit = order.status === "运输中";
   const isCompleted = order.status === "已完成" || hasSignedPod(order);
   const isException = order.status === "异常";
-  const isDispatched = !isPending;
   const isMoving = isInTransit || isCompleted || isException;
+  const isDispatched = !isPending || isMoving;
 
   return [
     {
