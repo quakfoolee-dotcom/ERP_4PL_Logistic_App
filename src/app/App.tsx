@@ -118,7 +118,7 @@ export default function App() {
       case "finance":
       case "ar":
       case "ap":
-      case "transfer": return <FinanceView />;
+      case "transfer": return <FinanceView section={activePage as "finance" | "ar" | "ap" | "transfer"} language={language} />;
       case "payroll":
       case "reimbursements": return <DriverPayroll />;
       case "warehouse":
