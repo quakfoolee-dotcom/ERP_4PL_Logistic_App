@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -62,16 +62,26 @@ const statusMeta: Record<StatusKey, { zh: string; en: string; bg: string; color:
   completed: { zh: "已完成", en: "Completed", bg: "#D1FAE5", color: "#047857", icon: <CheckCircle2 size={11} /> },
 };
 
+type InvoiceRow = (typeof invoices)[number];
+type PayableRow = (typeof payables)[number];
+type TransferRow = (typeof transfers)[number];
+
 export function FinanceView({ section = "finance", language = "zh" }: { section?: FinanceSection; language?: AppLanguage }) {
+  const [invoiceRows, setInvoiceRows] = useState(invoices);
+  const [payableRows] = useState(payables);
+  const [transferRows, setTransferRows] = useState(transfers);
   const [invoiceStatuses, setInvoiceStatuses] = useState<Record<string, StatusKey>>({});
   const [payableStatuses, setPayableStatuses] = useState<Record<string, StatusKey>>({});
-  const [selectedInvoice, setSelectedInvoice] = useState<typeof invoices[0] | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | null>(null);
+  const [selectedPayable, setSelectedPayable] = useState<PayableRow | null>(null);
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferRow | null>(null);
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
 
-  function invoiceStatus(invoice: typeof invoices[0]) {
+  function invoiceStatus(invoice: InvoiceRow) {
     return invoiceStatuses[invoice.id] ?? invoice.status;
   }
 
-  function payableStatus(payable: typeof payables[0]) {
+  function payableStatus(payable: PayableRow) {
     return payableStatuses[payable.id] ?? payable.status;
   }
 
@@ -82,7 +92,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   function batchIssue() {
     const updates: Record<string, StatusKey> = {};
     let count = 0;
-    invoices.forEach((invoice) => {
+    invoiceRows.forEach((invoice) => {
       if (invoiceStatus(invoice) === "pending") {
         updates[invoice.id] = "issued";
         count += 1;
@@ -97,6 +107,19 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
     toast.success(pick(language, "应付账款已批准", "Payable approved"));
   }
 
+  function createInvoice(invoice: InvoiceRow) {
+    setInvoiceRows((current) => [invoice, ...current]);
+    setInvoiceStatuses((previous) => ({ ...previous, [invoice.id]: "pending" }));
+    setShowNewInvoice(false);
+    toast.success(pick(language, `发票 ${invoice.id} 已新增`, `Invoice ${invoice.id} added`));
+  }
+
+  function markTransferSettled(id: string) {
+    const today = new Date().toLocaleDateString("en-CA");
+    setTransferRows((current) => current.map((transfer) => transfer.id === id ? { ...transfer, status: "completed" as StatusKey, settled: today } : transfer));
+    toast.success(pick(language, "中转记录已标记结算", "Transfer marked as settled"));
+  }
+
   function exportCsv(name: string, headers: string[], rows: Array<Array<string | number>>) {
     const csv = [headers, ...rows]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -109,6 +132,30 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  function exportCurrentSection() {
+    if (section === "ar") {
+      exportCsv("ar_invoices", ["Invoice #", "Customer", "Period", "Runs", "Subtotal", "HST", "Total", "Status", "Due"], invoiceRows.map((invoice) => [invoice.id, invoice.customer, invoice.period, invoice.orders, invoice.amount, invoice.tax, invoice.total, statusLabel(invoiceStatus(invoice), language), invoice.due]));
+      toast.success(pick(language, "应收发票已导出", "AR invoices exported"));
+    } else if (section === "ap") {
+      exportCsv("ap_payables", ["Payable #", "Vendor", "Category", "Period", "Runs", "Subtotal", "HST", "Total", "Status", "Due"], payableRows.map((payable) => [payable.id, payable.vendor, payable.category, payable.period, payable.runs, payable.subtotal, payable.tax, payable.total, statusLabel(payableStatus(payable), language), payable.due]));
+      toast.success(pick(language, "应付账款已导出", "AP payables exported"));
+    } else if (section === "transfer") {
+      exportCsv("transfer_summary", ["Transfer #", "Lane", "Partner", "Runs", "Revenue", "Cost", "Margin", "Status", "Settlement"], transferRows.map((transfer) => [transfer.id, transfer.lane, transfer.partner, transfer.runs, transfer.revenue, transfer.cost, transfer.margin, statusLabel(transfer.status, language), transfer.settled]));
+      toast.success(pick(language, "中转汇总已导出", "Transfer summary exported"));
+    }
+  }
+
+  useEffect(() => {
+    function handleFinanceCommand(event: Event) {
+      const detail = (event as CustomEvent<{ section: FinanceSection; action: "newInvoice" | "export" }>).detail;
+      if (!detail || detail.section !== section) return;
+      if (detail.action === "newInvoice") setShowNewInvoice(true);
+      if (detail.action === "export") exportCurrentSection();
+    }
+    window.addEventListener("erp4pl.finance.command", handleFinanceCommand);
+    return () => window.removeEventListener("erp4pl.finance.command", handleFinanceCommand);
+  }, [section, language, invoiceRows, invoiceStatuses, payableRows, payableStatuses, transferRows]);
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -125,30 +172,39 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
           }}
         />
       )}
+      {selectedPayable && <PayableDetailModal payable={selectedPayable} status={payableStatus(selectedPayable)} language={language} onClose={() => setSelectedPayable(null)} onApprove={() => { approvePayable(selectedPayable.id); setSelectedPayable(null); }} />}
+      {selectedTransfer && <TransferDetailModal transfer={selectedTransfer} language={language} onClose={() => setSelectedTransfer(null)} onSettle={() => { markTransferSettled(selectedTransfer.id); setSelectedTransfer(null); }} />}
+      {showNewInvoice && <NewInvoiceModal language={language} onClose={() => setShowNewInvoice(false)} onCreate={createInvoice} />}
 
       {section === "finance" && <FinanceOverview language={language} />}
       {section === "ar" && (
         <ARInvoices
           language={language}
+          invoices={invoiceRows}
           invoiceStatus={invoiceStatus}
           onIssue={issue}
           onBatchIssue={batchIssue}
           onSelectInvoice={setSelectedInvoice}
-          onExport={() => exportCsv("ar_invoices", ["Invoice #", "Customer", "Period", "Runs", "Subtotal", "HST", "Total", "Status", "Due"], invoices.map((invoice) => [invoice.id, invoice.customer, invoice.period, invoice.orders, invoice.amount, invoice.tax, invoice.total, statusLabel(invoiceStatus(invoice), language), invoice.due]))}
+          onExport={exportCurrentSection}
         />
       )}
       {section === "ap" && (
         <APPayables
           language={language}
+          payables={payableRows}
           payableStatus={payableStatus}
           onApprove={approvePayable}
-          onExport={() => exportCsv("ap_payables", ["Payable #", "Vendor", "Category", "Period", "Runs", "Subtotal", "HST", "Total", "Status", "Due"], payables.map((payable) => [payable.id, payable.vendor, payable.category, payable.period, payable.runs, payable.subtotal, payable.tax, payable.total, statusLabel(payableStatus(payable), language), payable.due]))}
+          onSelectPayable={setSelectedPayable}
+          onExport={exportCurrentSection}
         />
       )}
       {section === "transfer" && (
         <TransferSummary
           language={language}
-          onExport={() => exportCsv("transfer_summary", ["Transfer #", "Lane", "Partner", "Runs", "Revenue", "Cost", "Margin", "Status", "Settlement"], transfers.map((transfer) => [transfer.id, transfer.lane, transfer.partner, transfer.runs, transfer.revenue, transfer.cost, transfer.margin, statusLabel(transfer.status, language), transfer.settled]))}
+          transfers={transferRows}
+          onSelectTransfer={setSelectedTransfer}
+          onSettle={markTransferSettled}
+          onExport={exportCurrentSection}
         />
       )}
     </div>
@@ -198,12 +254,13 @@ function FinanceOverview({ language }: { language: AppLanguage }) {
   );
 }
 
-function ARInvoices({ language, invoiceStatus, onIssue, onBatchIssue, onSelectInvoice, onExport }: {
+function ARInvoices({ language, invoices, invoiceStatus, onIssue, onBatchIssue, onSelectInvoice, onExport }: {
   language: AppLanguage;
-  invoiceStatus: (invoice: typeof invoices[0]) => StatusKey;
+  invoices: InvoiceRow[];
+  invoiceStatus: (invoice: InvoiceRow) => StatusKey;
   onIssue: (id: string) => void;
   onBatchIssue: () => void;
-  onSelectInvoice: (invoice: typeof invoices[0]) => void;
+  onSelectInvoice: (invoice: InvoiceRow) => void;
   onExport: () => void;
 }) {
   return (
@@ -247,10 +304,12 @@ function ARInvoices({ language, invoiceStatus, onIssue, onBatchIssue, onSelectIn
   );
 }
 
-function APPayables({ language, payableStatus, onApprove, onExport }: {
+function APPayables({ language, payables, payableStatus, onApprove, onSelectPayable, onExport }: {
   language: AppLanguage;
-  payableStatus: (payable: typeof payables[0]) => StatusKey;
+  payables: PayableRow[];
+  payableStatus: (payable: PayableRow) => StatusKey;
   onApprove: (id: string) => void;
+  onSelectPayable: (payable: PayableRow) => void;
   onExport: () => void;
 }) {
   return (
@@ -286,7 +345,7 @@ function APPayables({ language, payableStatus, onApprove, onExport }: {
               <span key="due" style={{ color: currentStatus === "overdue" ? "#DC2626" : "var(--muted-foreground)", fontFamily: "monospace", fontWeight: currentStatus === "overdue" ? 700 : 400 }}>{payable.due}</span>,
               currentStatus === "scheduled"
                 ? <ActionButton key="action" label={pick(language, "批准", "Approve")} primary onClick={() => onApprove(payable.id)} />
-                : <ActionButton key="action" label={pick(language, "查看", "View")} onClick={() => toast.info(payable.id, { description: `${payable.vendor} · ${payable.total}` })} />,
+                : <ActionButton key="action" label={pick(language, "查看", "View")} onClick={() => onSelectPayable(payable)} />,
             ];
           })}
         />
@@ -295,7 +354,13 @@ function APPayables({ language, payableStatus, onApprove, onExport }: {
   );
 }
 
-function TransferSummary({ language, onExport }: { language: AppLanguage; onExport: () => void }) {
+function TransferSummary({ language, transfers, onSelectTransfer, onSettle, onExport }: {
+  language: AppLanguage;
+  transfers: TransferRow[];
+  onSelectTransfer: (transfer: TransferRow) => void;
+  onSettle: (id: string) => void;
+  onExport: () => void;
+}) {
   return (
     <>
       <KpiGrid
@@ -313,7 +378,7 @@ function TransferSummary({ language, onExport }: { language: AppLanguage; onExpo
         </Panel>
         <Panel title={pick(language, "中转汇总", "Transfer Summary")} subtitle={pick(language, "收入、成本与毛利", "Revenue, cost, and margin")} actions={<TableActions language={language} onExport={onExport} />}>
           <DataTable
-            headers={language === "en" ? ["Transfer #", "Lane", "Partner", "Runs", "Revenue", "Cost", "Margin", "Status", "Settlement"] : ["中转号", "线路", "合作方", "趟数", "收入", "成本", "毛利", "状态", "结算"]}
+            headers={language === "en" ? ["Transfer #", "Lane", "Partner", "Runs", "Revenue", "Cost", "Margin", "Status", "Settlement", "Action"] : ["中转号", "线路", "合作方", "趟数", "收入", "成本", "毛利", "状态", "结算", "操作"]}
             rows={transfers.map((transfer) => [
               <MonoLink key="id">{transfer.id}</MonoLink>,
               transfer.lane,
@@ -324,6 +389,9 @@ function TransferSummary({ language, onExport }: { language: AppLanguage; onExpo
               <StrongMono key="margin">{transfer.margin}</StrongMono>,
               <StatusPill key="status" status={transfer.status} language={language} />,
               <span key="settled" style={{ color: transfer.settled === "Pending" ? "#B45309" : "var(--muted-foreground)", fontFamily: "monospace" }}>{transfer.settled}</span>,
+              transfer.status === "pending"
+                ? <ActionButton key="action" label={pick(language, "结算", "Settle")} primary onClick={() => onSettle(transfer.id)} />
+                : <ActionButton key="action" label={pick(language, "查看", "View")} onClick={() => onSelectTransfer(transfer)} />,
             ])}
           />
         </Panel>
@@ -465,7 +533,108 @@ function MonoLink({ children }: { children: ReactNode }) {
   return <span style={{ fontFamily: "monospace", color: "var(--primary)", fontWeight: 800 }}>{children}</span>;
 }
 
-function InvoiceDetailModal({ invoice, status, language, onClose, onIssue }: { invoice: typeof invoices[0]; status: StatusKey; language: AppLanguage; onClose: () => void; onIssue: () => void }) {
+function NewInvoiceModal({ language, onClose, onCreate }: { language: AppLanguage; onClose: () => void; onCreate: (invoice: InvoiceRow) => void }) {
+  const [customer, setCustomer] = useState("");
+  const [period, setPeriod] = useState("2026-04");
+  const [orders, setOrders] = useState("1");
+  const [amount, setAmount] = useState("0");
+  const [due, setDue] = useState(new Date().toISOString().slice(0, 10));
+  const subtotal = Math.max(0, Number(amount) || 0);
+  const tax = Math.round(subtotal * 0.13);
+  const total = subtotal + tax;
+  const invalid = !customer.trim() || subtotal <= 0 || Number(orders) <= 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
+        <ModalHeader title={pick(language, "新建应收发票", "New AR Invoice")} subtitle={pick(language, "创建客户发票并加入待开具队列", "Create a customer invoice and add it to the pending queue")} onClose={onClose} />
+        <div className="grid gap-3 px-5 py-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <EditField label={pick(language, "客户/柜号", "Customer / Container")}>
+            <input value={customer} onChange={(event) => setCustomer(event.target.value)} style={inputStyle} placeholder="ZCSU6522960" />
+          </EditField>
+          <EditField label={pick(language, "期间", "Period")}>
+            <input value={period} onChange={(event) => setPeriod(event.target.value)} style={inputStyle} placeholder="2026-04" />
+          </EditField>
+          <EditField label={pick(language, "趟数", "Runs")}>
+            <input type="number" min={1} value={orders} onChange={(event) => setOrders(event.target.value)} style={inputStyle} />
+          </EditField>
+          <EditField label={pick(language, "税前金额CAD", "Pre-tax CAD")}>
+            <input type="number" min={0} value={amount} onChange={(event) => setAmount(event.target.value)} style={inputStyle} />
+          </EditField>
+          <EditField label={pick(language, "到期日", "Due Date")}>
+            <input type="date" value={due} onChange={(event) => setDue(event.target.value)} style={inputStyle} />
+          </EditField>
+          <div className="rounded-lg border p-3 text-xs" style={{ borderColor: "var(--border)", background: "var(--muted)" }}>
+            <div className="flex justify-between"><span>HST 13%</span><strong>CAD ${tax.toLocaleString()}</strong></div>
+            <div className="mt-2 flex justify-between"><span>{pick(language, "总额", "Total")}</span><strong>CAD ${total.toLocaleString()}</strong></div>
+          </div>
+        </div>
+        <ModalFooter
+          language={language}
+          onClose={onClose}
+          primaryLabel={pick(language, "新增发票", "Add Invoice")}
+          disabled={invalid}
+          onPrimary={() => onCreate({
+            id: `2026-${String(Math.floor(1000 + Math.random() * 9000))}`,
+            customer: customer.trim(),
+            period,
+            orders: Number(orders),
+            amount: `CAD $${subtotal.toLocaleString()}`,
+            tax: `CAD $${tax.toLocaleString()}`,
+            total: `CAD $${total.toLocaleString()}`,
+            status: "pending",
+            due,
+          })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PayableDetailModal({ payable, status, language, onClose, onApprove }: { payable: PayableRow; status: StatusKey; language: AppLanguage; onClose: () => void; onApprove: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
+        <ModalHeader title={payable.id} subtitle={pick(language, "应付账款详情", "AP Payable Detail")} onClose={onClose} />
+        <DetailRows rows={[
+          [pick(language, "供应商", "Vendor"), payable.vendor],
+          [pick(language, "类别", "Category"), payable.category],
+          [pick(language, "期间", "Period"), payable.period],
+          [pick(language, "趟数", "Runs"), String(payable.runs)],
+          [pick(language, "税前", "Subtotal"), payable.subtotal],
+          ["HST 13%", payable.tax],
+          [pick(language, "总额", "Total"), payable.total],
+          [pick(language, "到期日", "Due Date"), payable.due],
+        ]} />
+        <div className="px-5 pb-4"><StatusPill status={status} language={language} /></div>
+        <ModalFooter language={language} onClose={onClose} primaryLabel={pick(language, "批准付款", "Approve Payment")} onPrimary={onApprove} disabled={status !== "scheduled"} />
+      </div>
+    </div>
+  );
+}
+
+function TransferDetailModal({ transfer, language, onClose, onSettle }: { transfer: TransferRow; language: AppLanguage; onClose: () => void; onSettle: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
+        <ModalHeader title={transfer.id} subtitle={pick(language, "中转详情", "Transfer Detail")} onClose={onClose} />
+        <DetailRows rows={[
+          [pick(language, "线路", "Lane"), transfer.lane],
+          [pick(language, "合作方", "Partner"), transfer.partner],
+          [pick(language, "趟数", "Runs"), String(transfer.runs)],
+          [pick(language, "收入", "Revenue"), transfer.revenue],
+          [pick(language, "成本", "Cost"), transfer.cost],
+          [pick(language, "毛利", "Margin"), transfer.margin],
+          [pick(language, "结算日期", "Settlement"), transfer.settled],
+        ]} />
+        <div className="px-5 pb-4"><StatusPill status={transfer.status} language={language} /></div>
+        <ModalFooter language={language} onClose={onClose} primaryLabel={pick(language, "标记结算", "Mark Settled")} onPrimary={onSettle} disabled={transfer.status !== "pending"} />
+      </div>
+    </div>
+  );
+}
+
+function InvoiceDetailModal({ invoice, status, language, onClose, onIssue }: { invoice: InvoiceRow; status: StatusKey; language: AppLanguage; onClose: () => void; onIssue: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
@@ -503,6 +672,51 @@ function InvoiceDetailModal({ invoice, status, language, onClose, onIssue }: { i
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const inputStyle: CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--input-background)", color: "var(--foreground)", fontSize: 13 };
+
+function EditField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-foreground)", marginBottom: 5 }}>{label}</div>
+      {children}
+    </label>
+  );
+}
+
+function ModalHeader({ title, subtitle, onClose }: { title: string; subtitle: string; onClose: () => void }) {
+  return (
+    <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace", color: "var(--primary)" }}>{title}</div>
+        <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{subtitle}</div>
+      </div>
+      <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-muted" style={{ color: "var(--muted-foreground)" }}><X size={16} /></button>
+    </div>
+  );
+}
+
+function ModalFooter({ language, onClose, primaryLabel, onPrimary, disabled = false }: { language: AppLanguage; onClose: () => void; primaryLabel: string; onPrimary: () => void; disabled?: boolean }) {
+  return (
+    <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
+      <button onClick={onClose} className="rounded-lg border px-4 py-2 text-xs hover:bg-muted" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>{pick(language, "关闭", "Close")}</button>
+      <button onClick={onPrimary} disabled={disabled} className="rounded-lg px-4 py-2 text-xs" style={{ background: "var(--primary)", color: "white", fontWeight: 600, opacity: disabled ? 0.45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>{primaryLabel}</button>
+    </div>
+  );
+}
+
+function DetailRows({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <div className="space-y-2 px-5 py-4">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex justify-between gap-4 border-b py-2 text-xs" style={{ borderColor: "var(--border)" }}>
+          <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
+          <span style={{ fontWeight: 600, fontFamily: value.startsWith("CAD") || value.match(/^\d{4}-/) ? "monospace" : "inherit", textAlign: "right" }}>{value}</span>
+        </div>
+      ))}
     </div>
   );
 }

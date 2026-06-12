@@ -111,6 +111,10 @@ export default function App() {
     setOrders((current) => [order, ...current]);
   }
 
+  function sendFinanceCommand(action: "newInvoice" | "export") {
+    window.dispatchEvent(new CustomEvent("erp4pl.finance.command", { detail: { section: activePage, action } }));
+  }
+
   function renderContent() {
     switch (activePage) {
       case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} onUpdateOrder={updateOrder} language={language} />;
@@ -147,8 +151,8 @@ export default function App() {
           language={language}
           onToggleLanguage={() => setLanguage((current) => current === "en" ? "zh" : "en")}
           addLabel={language === "en" ? page.addLabelEn : page.addLabel}
-          onAdd={page.addLabel || page.addLabelEn ? () => setShowNewOrder(true) : undefined}
-          onExport={exportOrders}
+          onAdd={page.addLabel || page.addLabelEn ? () => activePage === "ar" ? sendFinanceCommand("newInvoice") : setShowNewOrder(true) : undefined}
+          onExport={["ar", "ap", "transfer"].includes(activePage) ? () => sendFinanceCommand("export") : exportOrders}
           onSearch={setGlobalOrderSearch}
           activeStatusFilter={globalOrderStatus}
           onFilterStatus={(status) => {
