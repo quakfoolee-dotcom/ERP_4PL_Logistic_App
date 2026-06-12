@@ -4,6 +4,7 @@ import { OrderDetailDrawer } from "./OrderDetailDrawer";
 import { toast } from "sonner";
 import type { TransportOrder } from "../data/transportOrders";
 import { useActionDialog } from "./ActionDialog";
+import { orderStatusLabel, pick, podLabel, type AppLanguage } from "../i18n";
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
   "已完成": { bg: "#D1FAE5", color: "#059669" },
@@ -33,9 +34,10 @@ interface TransportOrdersProps {
   onAddOrder: (order: TransportOrder) => void;
   externalSearch?: string;
   externalStatus?: string;
+  language: AppLanguage;
 }
 
-export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSearch = "", externalStatus = "全部" }: TransportOrdersProps) {
+export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSearch = "", externalStatus = "全部", language }: TransportOrdersProps) {
   const { promptDialog, ActionDialog } = useActionDialog();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("全部");
@@ -140,6 +142,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
         <OrderDetailDrawer
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
+          language={language}
           onEdit={() => setEditingOrder(selectedOrder)}
           onUpdate={(order) => {
             onUpdateOrder(order as TransportOrder);
@@ -147,15 +150,15 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
           }}
         />
       )}
-      {editingOrder && <OrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} onSave={saveOrder} />}
+      {editingOrder && <OrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} onSave={saveOrder} language={language} />}
 
       {/* Summary strip */}
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         {[
-          { label: "Total Orders (Apr 2026 + Nov 2025)", value: String(orders.length), color: "#1C64F2" },
-          { label: "Delivered 已完成", value: String(orders.filter((order) => order.status === "已完成").length), color: "#10B981" },
-          { label: "In Transit 运输中", value: String(orders.filter((order) => order.status === "运输中").length), color: "#1C64F2" },
-          { label: "Exception 异常", value: String(orders.filter((order) => order.status === "异常").length), color: "#EF4444" },
+          { label: pick(language, "订单总数（2026年4月 + 2025年11月）", "Total Orders (Apr 2026 + Nov 2025)"), value: String(orders.length), color: "#1C64F2" },
+          { label: orderStatusLabel("已完成", language), value: String(orders.filter((order) => order.status === "已完成").length), color: "#10B981" },
+          { label: orderStatusLabel("运输中", language), value: String(orders.filter((order) => order.status === "运输中").length), color: "#1C64F2" },
+          { label: orderStatusLabel("异常", language), value: String(orders.filter((order) => order.status === "异常").length), color: "#EF4444" },
         ].map((item, i) => (
           <div key={i} className="bg-card rounded-xl border p-3 flex items-center justify-between"
             style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -171,7 +174,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
         <div className="relative flex-1 max-w-xs">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--muted-foreground)" }} />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by order ID, customer, driver, destination..."
+            placeholder={pick(language, "按订单号、客户、司机、目的地搜索...", "Search by order ID, customer, driver, destination...")}
             className="w-full pl-8 pr-3 py-1.5 rounded-lg border text-xs outline-none"
             style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
         </div>
@@ -184,34 +187,34 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
                 color: statusFilter === s ? "white" : "var(--muted-foreground)",
                 fontWeight: statusFilter === s ? 500 : 400,
               }}>
-              {s}
+              {orderStatusLabel(s, language)}
             </button>
           ))}
         </div>
         <button onClick={() => setShowAdvanced((value) => !value)} className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border"
           style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-          <Filter size={12} /> Advanced Filter
+          <Filter size={12} /> {pick(language, "高级筛选", "Advanced Filter")}
         </button>
       </div>
       {showAdvanced && (
         <div className="bg-card rounded-xl border mb-4 px-4 py-3 grid gap-3" style={{ borderColor: "var(--border)", gridTemplateColumns: "repeat(5, minmax(120px, 1fr))" }}>
-          <FilterField label="Created From">
+          <FilterField label={pick(language, "创建日期从", "Created From")}>
             <input type="date" value={advanced.from} onChange={(event) => { setAdvanced((current) => ({ ...current, from: event.target.value })); setPage(1); }} className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
           </FilterField>
-          <FilterField label="Created To">
+          <FilterField label={pick(language, "创建日期到", "Created To")}>
             <input type="date" value={advanced.to} onChange={(event) => { setAdvanced((current) => ({ ...current, to: event.target.value })); setPage(1); }} className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
           </FilterField>
-          <FilterField label="Type">
+          <FilterField label={pick(language, "类型", "Type")}>
             <select value={advanced.type} onChange={(event) => { setAdvanced((current) => ({ ...current, type: event.target.value })); setPage(1); }} className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }}>
-              {["全部", "FTL", "LTL"].map((type) => <option key={type}>{type}</option>)}
+              {["全部", "FTL", "LTL"].map((type) => <option key={type} value={type}>{type === "全部" ? orderStatusLabel(type, language) : type}</option>)}
             </select>
           </FilterField>
-          <FilterField label="Min Revenue">
+          <FilterField label={pick(language, "最低收入", "Min Revenue")}>
             <input type="number" value={advanced.minRevenue} onChange={(event) => { setAdvanced((current) => ({ ...current, minRevenue: event.target.value })); setPage(1); }} placeholder="1000" className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
           </FilterField>
           <div className="flex items-end">
             <button onClick={() => { setAdvanced({ from: "", to: "", type: "全部", minRevenue: "" }); setSearch(""); setStatusFilter("全部"); setPage(1); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
-              <X size={12} /> Clear
+              <X size={12} /> {pick(language, "清除", "Clear")}
             </button>
           </div>
         </div>
@@ -223,7 +226,9 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
         <table className="w-full">
           <thead>
             <tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-              {["Order ID", "Customer", "Origin → Destination", "Driver", "Type", "Pallets", "Status", "Revenue (CAD)", "Cost (CAD)", "Profit", "POD", "Date", "Actions"].map((h, i) => (
+              {(language === "en"
+                ? ["Order ID", "Customer", "Origin → Destination", "Driver", "Type", "Pallets", "Status", "Revenue (CAD)", "Cost (CAD)", "Profit", "POD", "Date", "Actions"]
+                : ["订单号", "客户", "起点 → 终点", "司机", "类型", "托盘", "状态", "收入(CAD)", "成本(CAD)", "利润", "POD", "日期", "操作"]).map((h, i) => (
                 <th key={i} className="px-3 py-2.5 text-left whitespace-nowrap"
                   style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 500 }}>{h}</th>
               ))}
@@ -253,7 +258,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
                 <td className="px-3 py-2.5">
                   <span className="px-2 py-0.5 rounded-full text-xs"
                     style={{ background: statusStyle[order.status]?.bg, color: statusStyle[order.status]?.color, fontWeight: 500, fontSize: 11 }}>
-                    {order.status}
+                    {orderStatusLabel(order.status, language)}
                   </span>
                 </td>
                 <td className="px-3 py-2.5" style={{ fontSize: 12, fontWeight: 600, fontFamily: "monospace", color: "#1D4ED8" }}>{order.amount}</td>
@@ -261,22 +266,22 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
                 <td className="px-3 py-2.5" style={{ fontSize: 12, fontFamily: "monospace", color: order.profit !== "—" ? "#059669" : "var(--muted-foreground)", fontWeight: order.profit !== "—" ? 600 : 400 }}>{order.profit}</td>
                 <td className="px-3 py-2.5">
                   <span style={{ fontSize: 11, color: order.pod === "已签收" ? "#059669" : order.pod === "争议中" ? "#DC2626" : "var(--muted-foreground)" }}>
-                    {order.pod}
+                    {podLabel(order.pod, language)}
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)", fontFamily: "monospace" }}>{order.created}</td>
                 <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setSelectedOrder(order)} className="p-1 rounded hover:bg-muted" style={{ color: "var(--primary)" }} title="View Detail"><Eye size={13} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }} className="p-1 rounded hover:bg-muted" style={{ color: "var(--muted-foreground)" }} title="Edit"><Edit size={13} /></button>
+                    <button onClick={() => setSelectedOrder(order)} className="p-1 rounded hover:bg-muted" style={{ color: "var(--primary)" }} title={pick(language, "查看详情", "View Detail")}><Eye size={13} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }} className="p-1 rounded hover:bg-muted" style={{ color: "var(--muted-foreground)" }} title={pick(language, "编辑", "Edit")}><Edit size={13} /></button>
                     <div className="relative">
-                      <button onClick={(e) => { e.stopPropagation(); setActionsFor(actionsFor === order.id ? null : order.id); }} className="p-1 rounded hover:bg-muted" style={{ color: "var(--muted-foreground)" }} title="More"><MoreHorizontal size={13} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setActionsFor(actionsFor === order.id ? null : order.id); }} className="p-1 rounded hover:bg-muted" style={{ color: "var(--muted-foreground)" }} title={pick(language, "更多", "More")}><MoreHorizontal size={13} /></button>
                       {actionsFor === order.id && (
                         <div className="absolute right-0 top-6 z-20 w-44 rounded-lg border bg-card p-1 shadow-lg" style={{ borderColor: "var(--border)" }}>
-                          <ActionButton icon={<Copy size={12} />} label="Copy ID" onClick={() => { copyOrderId(order); setActionsFor(null); }} />
-                          <ActionButton icon={<UserPlus size={12} />} label="Assign Driver" onClick={() => { setActionsFor(null); assignDriver(order); }} />
-                          <ActionButton icon={<MoreHorizontal size={12} />} label="Duplicate" onClick={() => { duplicateOrder(order); setActionsFor(null); }} />
-                          <ActionButton icon={<Printer size={12} />} label="Print BOL" onClick={() => { printBol(order); setActionsFor(null); }} />
+                          <ActionButton icon={<Copy size={12} />} label={pick(language, "复制ID", "Copy ID")} onClick={() => { copyOrderId(order); setActionsFor(null); }} />
+                          <ActionButton icon={<UserPlus size={12} />} label={pick(language, "分配司机", "Assign Driver")} onClick={() => { setActionsFor(null); assignDriver(order); }} />
+                          <ActionButton icon={<MoreHorizontal size={12} />} label={pick(language, "复制订单", "Duplicate")} onClick={() => { duplicateOrder(order); setActionsFor(null); }} />
+                          <ActionButton icon={<Printer size={12} />} label={pick(language, "打印提单", "Print BOL")} onClick={() => { printBol(order); setActionsFor(null); }} />
                         </div>
                       )}
                     </div>
@@ -288,7 +293,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
         </table>
         <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: "var(--border)" }}>
           <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} records
+            {pick(language, "显示", "Showing")} {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(page * PAGE_SIZE, filtered.length)} {pick(language, "条，共", "of")} {filtered.length} {pick(language, "条记录", "records")}
           </span>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
@@ -333,7 +338,7 @@ function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: 
   );
 }
 
-export function OrderEditModal({ order, onClose, onSave }: { order: TransportOrder; onClose: () => void; onSave: (order: TransportOrder) => void }) {
+export function OrderEditModal({ order, onClose, onSave, language = "en" }: { order: TransportOrder; onClose: () => void; onSave: (order: TransportOrder) => void; language?: AppLanguage }) {
   const [draft, setDraft] = useState(order);
   const set = (key: keyof TransportOrder, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const revenue = moneyValue(draft.amount);
@@ -345,37 +350,37 @@ export function OrderEditModal({ order, onClose, onSave }: { order: TransportOrd
       <div className="w-full max-w-2xl rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Edit Order</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{pick(language, "编辑订单", "Edit Order")}</div>
             <div style={{ fontSize: 11, color: "var(--muted-foreground)", fontFamily: "monospace" }}>{order.id}</div>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-muted" style={{ color: "var(--muted-foreground)" }}><X size={16} /></button>
         </div>
 
         <div className="grid gap-3 px-5 py-4" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-          <EditField label="Customer" value={draft.customer} onChange={(value) => set("customer", value)} />
-          <EditField label="Driver" value={draft.driver} onChange={(value) => set("driver", value)} />
-          <EditField label="Origin" value={draft.origin} onChange={(value) => set("origin", value)} />
-          <EditField label="Destination" value={draft.dest} onChange={(value) => set("dest", value)} />
-          <EditField label="Pallets" value={draft.pallets} onChange={(value) => set("pallets", value)} />
+          <EditField label={pick(language, "客户", "Customer")} value={draft.customer} onChange={(value) => set("customer", value)} />
+          <EditField label={pick(language, "司机", "Driver")} value={draft.driver} onChange={(value) => set("driver", value)} />
+          <EditField label={pick(language, "起点", "Origin")} value={draft.origin} onChange={(value) => set("origin", value)} />
+          <EditField label={pick(language, "终点", "Destination")} value={draft.dest} onChange={(value) => set("dest", value)} />
+          <EditField label={pick(language, "托盘", "Pallets")} value={draft.pallets} onChange={(value) => set("pallets", value)} />
           <label>
-            <div className="mb-1 text-xs" style={{ color: "var(--muted-foreground)", fontWeight: 600 }}>Status</div>
+            <div className="mb-1 text-xs" style={{ color: "var(--muted-foreground)", fontWeight: 600 }}>{pick(language, "状态", "Status")}</div>
             <select value={draft.status} onChange={(event) => set("status", event.target.value)} className="w-full rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }}>
-              {["待派送", "运输中", "已完成", "异常"].map((status) => <option key={status}>{status}</option>)}
+              {["待派送", "运输中", "已完成", "异常"].map((status) => <option key={status} value={status}>{orderStatusLabel(status, language)}</option>)}
             </select>
           </label>
-          <EditField label="Revenue" value={draft.amount} onChange={(value) => set("amount", value)} />
-          <EditField label="Cost" value={draft.cost} onChange={(value) => set("cost", value)} />
+          <EditField label={pick(language, "收入", "Revenue")} value={draft.amount} onChange={(value) => set("amount", value)} />
+          <EditField label={pick(language, "成本", "Cost")} value={draft.cost} onChange={(value) => set("cost", value)} />
           <EditField label="POD" value={draft.pod} onChange={(value) => set("pod", value)} />
           <EditField label="ETA" value={draft.eta} onChange={(value) => set("eta", value)} type="date" />
         </div>
 
         <div className="flex items-center justify-between border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <span className="text-xs" style={{ color: invalid ? "#DC2626" : "var(--muted-foreground)" }}>
-            {invalid ? "Customer, route, driver, and positive revenue are required." : `Calculated profit: ${formatCAD(revenue - cost)}`}
+            {invalid ? pick(language, "客户、路线、司机和正收入为必填项。", "Customer, route, driver, and positive revenue are required.") : `${pick(language, "计算利润", "Calculated profit")}: ${formatCAD(revenue - cost)}`}
           </span>
           <div className="flex gap-2">
-            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-xs hover:bg-muted" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>Cancel</button>
-            <button onClick={() => !invalid && onSave(draft)} disabled={invalid} className="rounded-lg px-4 py-2 text-xs" style={{ background: "var(--primary)", color: "white", opacity: invalid ? 0.45 : 1, fontWeight: 600 }}>Save</button>
+            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-xs hover:bg-muted" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>{pick(language, "取消", "Cancel")}</button>
+            <button onClick={() => !invalid && onSave(draft)} disabled={invalid} className="rounded-lg px-4 py-2 text-xs" style={{ background: "var(--primary)", color: "white", opacity: invalid ? 0.45 : 1, fontWeight: 600 }}>{pick(language, "保存", "Save")}</button>
           </div>
         </div>
       </div>

@@ -17,8 +17,7 @@ import { ReconciliationView } from "./components/ReconciliationView";
 import { ComplianceView } from "./components/ComplianceView";
 import { SettingsView } from "./components/SettingsView";
 import { initialTransportOrders, type TransportOrder } from "./data/transportOrders";
-
-export type AppLanguage = "zh" | "en";
+import { type AppLanguage } from "./i18n";
 
 const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: string; addLabelEn?: string }> = {
   dashboard: { title: "运营控制台", titleEn: "Operations Dashboard" },
@@ -42,13 +41,13 @@ const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: st
   settings: { title: "系统设置", titleEn: "System Settings" },
 };
 
-function PlaceholderView({ title, titleEn }: { title: string; titleEn: string }) {
+function PlaceholderView({ title, language }: { title: string; language: AppLanguage }) {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center">
         <div style={{ fontSize: 48, marginBottom: 12 }}>🚧</div>
         <div className="text-lg" style={{ fontWeight: 600, color: "var(--foreground)" }}>{title}</div>
-        <div className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>{titleEn} — Coming Soon</div>
+        <div className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>{language === "en" ? "Coming Soon" : "即将推出"}</div>
       </div>
     </div>
   );
@@ -114,8 +113,8 @@ export default function App() {
 
   function renderContent() {
     switch (activePage) {
-      case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} onUpdateOrder={updateOrder} />;
-      case "orders": return <TransportOrders orders={orders} onUpdateOrder={updateOrder} onAddOrder={addOrder} externalSearch={globalOrderSearch} externalStatus={globalOrderStatus} />;
+      case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} onUpdateOrder={updateOrder} language={language} />;
+      case "orders": return <TransportOrders orders={orders} onUpdateOrder={updateOrder} onAddOrder={addOrder} externalSearch={globalOrderSearch} externalStatus={globalOrderStatus} language={language} />;
       case "finance":
       case "ar":
       case "ap":
@@ -130,10 +129,10 @@ export default function App() {
       case "pod": return <PODManagement />;
       case "profiles": return <DriverProfiles />;
       case "quotes": return <PartnerQuotes />;
-      case "reconcile": return <ReconciliationView />;
+      case "reconcile": return <ReconciliationView language={language} />;
       case "compliance": return <ComplianceView />;
       case "settings": return <SettingsView />;
-      default: return <PlaceholderView title={page.title} titleEn={page.titleEn} />;
+      default: return <PlaceholderView title={language === "en" ? page.titleEn : page.title} language={language} />;
     }
   }
 
@@ -144,7 +143,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
           title={language === "en" ? page.titleEn : page.title}
-          titleEn={language === "en" ? page.title : page.titleEn}
+          titleEn=""
           language={language}
           onToggleLanguage={() => setLanguage((current) => current === "en" ? "zh" : "en")}
           addLabel={language === "en" ? page.addLabelEn : page.addLabel}

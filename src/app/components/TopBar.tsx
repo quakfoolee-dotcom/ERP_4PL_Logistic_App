@@ -1,7 +1,7 @@
 import { Search, Bell, RefreshCw, Download, Plus, Filter, Calendar, Languages } from "lucide-react";
 import { useState } from "react";
 import { NotificationPanel } from "./NotificationPanel";
-import type { AppLanguage } from "../App";
+import type { AppLanguage } from "../i18n";
 
 interface TopBarProps {
   title: string;
@@ -61,7 +61,7 @@ export function TopBar({ title, titleEn, language, onToggleLanguage, onAdd, addL
       {/* Title */}
       <div className="mr-2">
         <div className="text-sm" style={{ fontWeight: 600, color: "var(--foreground)" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{titleEn}</div>
+        {titleEn && <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{titleEn}</div>}
       </div>
 
       <div className="w-px h-8" style={{ background: "var(--border)" }} />
@@ -77,7 +77,7 @@ export function TopBar({ title, titleEn, language, onToggleLanguage, onAdd, addL
             border: activePeriod === p ? "1px solid var(--primary)30" : "1px solid transparent",
           }}>
           {p === "Apr 2026" && <Calendar size={11} />}
-          {p}
+          {language === "en" ? p : ({ "Apr 2026": "2026年4月", "Mar 2026": "2026年3月", "Nov 2025": "2025年11月", "YTD 2026": "2026年至今" } as Record<string, string>)[p]}
         </button>
       ))}
 
@@ -99,7 +99,7 @@ export function TopBar({ title, titleEn, language, onToggleLanguage, onAdd, addL
           style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", fontWeight: 600 }}
           title={language === "en" ? "Switch to Chinese" : "Switch to English"}>
           <Languages size={13} />
-          {language === "en" ? "中文" : "EN"}
+          {language === "en" ? "Chinese" : "英语"}
         </button>
         <button onClick={handleRefresh}
           className="p-1.5 rounded-lg border transition-colors hover:bg-muted"

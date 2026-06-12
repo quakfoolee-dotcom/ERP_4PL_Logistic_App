@@ -5,7 +5,7 @@ import {
   Building2, BarChart3, Settings, ChevronDown, ChevronRight,
   Warehouse, CreditCard, ClipboardCheck, DollarSign, Globe
 } from "lucide-react";
-import type { AppLanguage } from "../App";
+import type { AppLanguage } from "../i18n";
 
 interface NavItem {
   icon: React.ReactNode;
@@ -81,9 +81,9 @@ export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
           <Globe size={16} className="text-white" />
         </div>
         <div>
-          <div className="text-white text-xs leading-none" style={{ fontWeight: 600 }}>枫途物流 Canada</div>
+          <div className="text-white text-xs leading-none" style={{ fontWeight: 600 }}>{language === "en" ? "Fengtu Logistics Canada" : "枫途物流加拿大"}</div>
           <div className="text-xs leading-none mt-0.5" style={{ color: "var(--sidebar-foreground)", opacity: 0.6, fontSize: 10 }}>
-            {language === "en" ? "GTA 4PL · FBA Logistics" : "GTA 4PL · FBA物流"}
+            {language === "en" ? "GTA 4PL FBA Logistics" : "GTA 4PL FBA物流"}
           </div>
         </div>
       </div>
@@ -117,7 +117,6 @@ export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
               <span style={{ opacity: 0.8 }}>{item.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-xs" style={{ fontWeight: 500, lineHeight: 1.3 }}>{language === "en" ? item.labelEn : item.label}</div>
-                <div style={{ fontSize: 10, opacity: 0.5, lineHeight: 1.2 }}>{language === "en" ? item.label : item.labelEn}</div>
               </div>
               {item.children && (
                 <span style={{ opacity: 0.5 }}>
@@ -166,8 +165,8 @@ export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
             OP
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-white truncate" style={{ fontWeight: 500 }}>Ops Team</div>
-            <div style={{ fontSize: 10, color: "var(--sidebar-foreground)", opacity: 0.5 }}>Brampton Hub Manager</div>
+            <div className="text-xs text-white truncate" style={{ fontWeight: 500 }}>{language === "en" ? "Ops Team" : "运营团队"}</div>
+            <div style={{ fontSize: 10, color: "var(--sidebar-foreground)", opacity: 0.5 }}>{language === "en" ? "Brampton Hub Manager" : "Brampton仓库经理"}</div>
           </div>
         </div>
       </div>

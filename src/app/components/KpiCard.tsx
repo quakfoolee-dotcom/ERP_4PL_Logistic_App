@@ -2,7 +2,7 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface KpiCardProps {
   label: string;
-  labelEn: string;
+  labelEn?: string;
   value: string;
   sub?: string;
   trend?: number;
@@ -21,7 +21,7 @@ export function KpiCard({ label, labelEn, value, sub, trend, trendLabel, accent 
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>{label}</div>
-          <div style={{ fontSize: 10, color: "var(--muted-foreground)", opacity: 0.7 }}>{labelEn}</div>
+          {labelEn && <div style={{ fontSize: 10, color: "var(--muted-foreground)", opacity: 0.7 }}>{labelEn}</div>}
         </div>
         {icon && (
           <div className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -48,7 +48,7 @@ export function KpiCard({ label, labelEn, value, sub, trend, trendLabel, accent 
           <span style={{ color: isPositive ? "#10B981" : isNegative ? "#EF4444" : "var(--muted-foreground)", fontWeight: 500 }}>
             {trend > 0 ? "+" : ""}{trend}%
           </span>
-          <span style={{ color: "var(--muted-foreground)" }}>{trendLabel || "较上月"}</span>
+          <span style={{ color: "var(--muted-foreground)" }}>{trendLabel || ""}</span>
         </div>
       )}
     </div>

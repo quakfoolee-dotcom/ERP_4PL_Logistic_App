@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DollarSign, AlertTriangle, CheckCircle2, TrendingUp, XCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import { pick, type AppLanguage } from "../i18n";
 
 type RecStatus = "matched" | "unmatched" | "disputed";
 interface RecRow { id: string; customer: string; invoiceAmt: number; driverCost: number; status: RecStatus; note?: string; }
@@ -28,7 +29,7 @@ const card: React.CSSProperties = { background:"var(--card)", borderRadius:12, b
 const th: React.CSSProperties = { background:"var(--muted)", fontSize:11, fontWeight:600, padding:"8px 12px", textAlign:"left", color:"var(--muted-foreground)" };
 const td: React.CSSProperties = { padding:"10px 12px", fontSize:12, borderBottom:"1px solid var(--border)" };
 
-export function ReconciliationView() {
+export function ReconciliationView({ language }: { language: AppLanguage }) {
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
   const [rows, setRows] = useState<RecRow[]>(init);
   const [filter, setFilter] = useState<"all"|RecStatus>("all");
@@ -67,7 +68,7 @@ export function ReconciliationView() {
     const invoiceAmt = Number(draft.invoiceAmt);
     const driverCost = Number(draft.driverCost);
     if (!Number.isFinite(invoiceAmt) || !Number.isFinite(driverCost) || invoiceAmt < 0 || driverCost < 0) {
-      toast.error("Enter valid non-negative invoice and driver cost amounts.");
+      toast.error(pick(language, "请输入有效的非负发票金额和司机成本。", "Enter valid non-negative invoice and driver cost amounts."));
       return;
     }
     setRows(prev => prev.map(row => row.id === id ? {
@@ -78,7 +79,7 @@ export function ReconciliationView() {
       note: draft.note.trim() || undefined,
     } : row));
     setEditingId(null);
-    toast.success(`${id} updated`);
+    toast.success(pick(language, `${id} 已更新`, `${id} updated`));
   }
 
   function matchRow(id: string) {
@@ -86,7 +87,7 @@ export function ReconciliationView() {
     toast.success(`${id} matched ✓`);
   }
   async function disputeRow(id: string) {
-    const reason = await promptDialog("Dispute Reason");
+    const reason = await promptDialog(pick(language, "争议原因", "Dispute Reason"));
     if (!reason) return;
     setRows(p=>p.map(r=>r.id===id?{...r,status:"disputed",note:reason}:r));
     toast.warning("Dispute flagged", { description: reason });
@@ -100,7 +101,7 @@ export function ReconciliationView() {
     toast.warning(`${id} escalated`, { description: "Row remains in disputed status with escalation note." });
   }
   async function writeOffRow(id: string) {
-    const ok = await confirmDialog("Write Off Reconciliation", { message: `Write off ${id}? This marks it as matched with a zero-cost adjustment.` });
+    const ok = await confirmDialog(pick(language, "核销对账", "Write Off Reconciliation"), { message: pick(language, `核销 ${id}？这会用零调整标记为已对账。`, `Write off ${id}? This marks it as matched with a zero-cost adjustment.`) });
     if (!ok) return;
     setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:"Written off — zero adjustment"}:r));
     toast.info(`${id} written off`);
@@ -125,11 +126,11 @@ export function ReconciliationView() {
       {/* KPIs — clickable to filter */}
       <div className="flex gap-4 mb-5">
         {[
-          { label:"Total Billed (AR)",   value:`CAD $${totalAR.toLocaleString()}`,  icon:DollarSign,    color:"var(--primary)", bg:"#eff6ff",  f:"all" },
-          { label:"Total Driver Cost",   value:`CAD $${totalAP.toLocaleString()}`,  icon:TrendingUp,    color:"#8B5CF6",       bg:"#f3e8ff",  f:"all" },
-          { label:"Net Margin",          value:`CAD $${net.toLocaleString()}`,       icon:CheckCircle2,  color:"#047857",       bg:"#d1fae5",  f:"matched" },
-          { label:"Unmatched Items",     value:String(unmatched),                    icon:XCircle,       color:"#b91c1c",       bg:"#fee2e2",  f:"unmatched" },
-          { label:"Disputed Items",      value:String(disputed),                     icon:AlertTriangle, color:"#b45309",       bg:"#fef3c7",  f:"disputed" },
+          { label:pick(language, "应收开票总额", "Total Billed (AR)"),   value:`CAD $${totalAR.toLocaleString()}`,  icon:DollarSign,    color:"var(--primary)", bg:"#eff6ff",  f:"all" },
+          { label:pick(language, "司机成本总额", "Total Driver Cost"),   value:`CAD $${totalAP.toLocaleString()}`,  icon:TrendingUp,    color:"#8B5CF6",       bg:"#f3e8ff",  f:"all" },
+          { label:pick(language, "净毛利", "Net Margin"),          value:`CAD $${net.toLocaleString()}`,       icon:CheckCircle2,  color:"#047857",       bg:"#d1fae5",  f:"matched" },
+          { label:pick(language, "未匹配项目", "Unmatched Items"),     value:String(unmatched),                    icon:XCircle,       color:"#b91c1c",       bg:"#fee2e2",  f:"unmatched" },
+          { label:pick(language, "争议项目", "Disputed Items"),      value:String(disputed),                     icon:AlertTriangle, color:"#b45309",       bg:"#fef3c7",  f:"disputed" },
         ].map(({ label, value, icon: Icon, color, bg, f })=>(
           <div key={label} style={{...card,flex:1,padding:16,cursor:"pointer"}} onClick={()=>setFilter(f as any)}>
             <div className="flex items-center justify-between">
@@ -146,23 +147,23 @@ export function ReconciliationView() {
       <div style={{...card,padding:0,overflow:"hidden"}}>
         <div className="flex items-center justify-between" style={{padding:"12px 16px",borderBottom:"1px solid var(--border)"}}>
           <div>
-            <div style={{fontWeight:700,fontSize:14}}>对账明细 Reconciliation Table</div>
-            <div style={{fontSize:11,color:"var(--muted-foreground)"}}>Invoice AR matched against Driver AP costs — CAD</div>
+            <div style={{fontWeight:700,fontSize:14}}>{pick(language, "对账明细", "Reconciliation Table")}</div>
+            <div style={{fontSize:11,color:"var(--muted-foreground)"}}>{pick(language, "发票应收与司机应付成本匹配 — CAD", "Invoice AR matched against Driver AP costs — CAD")}</div>
           </div>
           <div className="flex gap-2">
             {(["all","matched","unmatched","disputed"] as const).map(f=>(
               <button key={f} onClick={()=>setFilter(f)} style={{padding:"4px 12px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",cursor:"pointer",fontWeight:600,background:filter===f?"var(--primary)":"var(--card)",color:filter===f?"#fff":"var(--foreground)"}}>
-                {f==="all"?"All":sm[f]?.label||f}
+                {f==="all"?pick(language, "全部", "All"):(language === "en" ? sm[f]?.labelEn : sm[f]?.label)||f}
               </button>
             ))}
             <button onClick={exportCSV} className="flex items-center gap-1" style={{padding:"4px 12px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",cursor:"pointer",color:"var(--muted-foreground)",background:"var(--card)"}}>
-              <Download size={12}/> Export
+              <Download size={12}/> {pick(language, "导出", "Export")}
             </button>
           </div>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
-            <tr>{["Invoice #","Customer","Invoice (CAD)","Driver Cost","Gross Margin","Margin %","Status","Notes","Actions"].map(h=><th key={h} style={th}>{h}</th>)}</tr>
+            <tr>{(language === "en" ? ["Invoice #","Customer","Invoice (CAD)","Driver Cost","Gross Margin","Margin %","Status","Notes","Actions"] : ["发票号","客户","发票(CAD)","司机成本","毛利","毛利率","状态","备注","操作"]).map(h=><th key={h} style={th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {displayed.map(r=>{
@@ -180,7 +181,7 @@ export function ReconciliationView() {
                       <input type="number" min="0" value={draft.invoiceAmt} onChange={event => setDraft(current => ({ ...current, invoiceAmt: event.target.value }))}
                         className="w-24 rounded-md border px-2 py-1 text-xs outline-none"
                         style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
-                    ) : r.invoiceAmt===0?"No Invoice":`$${r.invoiceAmt.toLocaleString()}`}
+                    ) : r.invoiceAmt===0?pick(language, "无发票", "No Invoice"):`$${r.invoiceAmt.toLocaleString()}`}
                   </td>
                   <td style={{...td,fontFamily:"monospace",color:"#8B5CF6"}}>
                     {editing ? (
@@ -200,16 +201,16 @@ export function ReconciliationView() {
                       <select value={draft.status} onChange={event => setDraft(current => ({ ...current, status: event.target.value as RecStatus }))}
                         className="rounded-md border px-2 py-1 text-xs outline-none"
                         style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }}>
-                        {(["matched", "unmatched", "disputed"] as const).map(status => <option key={status} value={status}>{sm[status].labelEn}</option>)}
+                        {(["matched", "unmatched", "disputed"] as const).map(status => <option key={status} value={status}>{language === "en" ? sm[status].labelEn : sm[status].label}</option>)}
                       </select>
                     ) : (
-                      <span style={{background:s.bg,color:s.color,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600}}>{s.label}</span>
+                      <span style={{background:s.bg,color:s.color,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600}}>{language === "en" ? s.labelEn : s.label}</span>
                     )}
                   </td>
                   <td style={{...td,fontSize:11,color:"var(--muted-foreground)",maxWidth:220}}>
                     {editing ? (
                       <textarea value={draft.note} onChange={event => setDraft(current => ({ ...current, note: event.target.value }))}
-                        rows={2} placeholder="Add reconciliation note..."
+                        rows={2} placeholder={pick(language, "添加对账备注...", "Add reconciliation note...")}
                         className="w-full resize-none rounded-md border px-2 py-1 text-xs outline-none"
                         style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
                     ) : r.note||"—"}
@@ -217,18 +218,18 @@ export function ReconciliationView() {
                   <td style={td}>
                     <div className="flex gap-1.5 flex-wrap">
                       {editing ? <>
-                        <button onClick={()=>saveEdit(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Save</button>
-                        <button onClick={cancelEdit} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Cancel</button>
+                        <button onClick={()=>saveEdit(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "保存", "Save")}</button>
+                        <button onClick={cancelEdit} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>{pick(language, "取消", "Cancel")}</button>
                       </> : <>
-                      <button onClick={()=>startEdit(r)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer",fontWeight:600}}>Edit</button>
+                      <button onClick={()=>startEdit(r)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer",fontWeight:600}}>{pick(language, "编辑", "Edit")}</button>
                       {r.status==="unmatched" && <>
-                        <button onClick={()=>matchRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Match</button>
-                        <button onClick={()=>disputeRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>Dispute</button>
-                        <button onClick={()=>writeOffRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Write-off</button>
+                        <button onClick={()=>matchRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "匹配", "Match")}</button>
+                        <button onClick={()=>disputeRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>{pick(language, "争议", "Dispute")}</button>
+                        <button onClick={()=>writeOffRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>{pick(language, "核销", "Write-off")}</button>
                       </>}
                       {r.status==="disputed" && <>
-                        <button onClick={()=>resolveRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Resolve</button>
-                        <button onClick={()=>escalateRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Escalate</button>
+                        <button onClick={()=>resolveRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "解决", "Resolve")}</button>
+                        <button onClick={()=>escalateRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>{pick(language, "升级", "Escalate")}</button>
                       </>}
                       {r.status==="matched" && <span style={{fontSize:11,color:"#047857"}}>✓</span>}
                       </>}
@@ -240,7 +241,7 @@ export function ReconciliationView() {
           </tbody>
         </table>
         <div style={{padding:"10px 16px",borderTop:"1px solid var(--border)",fontSize:12,color:"var(--muted-foreground)"}}>
-          {displayed.length} records · Click KPI cards to filter · Click table actions to match, dispute or resolve
+          {displayed.length} {pick(language, "条记录 · 点击KPI卡片筛选 · 点击表格操作进行匹配、争议或解决", "records · Click KPI cards to filter · Click table actions to match, dispute or resolve")}
         </div>
       </div>
     </div>

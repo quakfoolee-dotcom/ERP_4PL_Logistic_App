@@ -11,6 +11,7 @@ import { OrderDetailDrawer } from "./OrderDetailDrawer";
 import { OrderEditModal } from "./TransportOrders";
 import type { TransportOrder } from "../data/transportOrders";
 import { toast } from "sonner";
+import { orderStatusLabel, pick, podLabel, type AppLanguage } from "../i18n";
 
 // Monthly revenue (CAD $K) — Brampton 4PL FBA ops Jan–Jun 2026
 const revenueData = [
@@ -23,10 +24,10 @@ const revenueData = [
 ];
 
 const orderStatusData = [
-  { name: "Delivered 已完成", value: 142, color: "#10B981" },
-  { name: "In Transit 运输中", value: 28, color: "#1C64F2" },
-  { name: "Pending 待派送", value: 9, color: "#F59E0B" },
-  { name: "Rejected 拒收", value: 7, color: "#EF4444" },
+  { zh: "已完成", en: "Delivered", value: 142, color: "#10B981" },
+  { zh: "运输中", en: "In Transit", value: 28, color: "#1C64F2" },
+  { zh: "待派送", en: "Pending", value: 9, color: "#F59E0B" },
+  { zh: "异常", en: "Exception", value: 7, color: "#EF4444" },
 ];
 
 const buPerformance = [
@@ -67,12 +68,11 @@ const statusStyle: Record<string, { bg: string; color: string }> = {
   "异常": { bg: "#FEE2E2", color: "#DC2626" },
 };
 
-function SectionHeader({ label, labelEn, action, onAction }: { label: string; labelEn: string; action?: string; onAction?: () => void }) {
+function SectionHeader({ label, action, onAction }: { label: string; action?: string; onAction?: () => void }) {
   return (
     <div className="flex items-center justify-between mb-3">
       <div>
         <span className="text-sm" style={{ fontWeight: 600, color: "var(--foreground)" }}>{label}</span>
-        <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>{labelEn}</span>
       </div>
       {action && (
         <button onClick={onAction} className="text-xs hover:underline" style={{ color: "var(--primary)" }}>{action}</button>
@@ -85,6 +85,7 @@ interface DashboardProps {
   orders: TransportOrder[];
   onNavigate?: (page: string) => void;
   onUpdateOrder?: (order: TransportOrder) => void;
+  language: AppLanguage;
 }
 
 function moneyValue(value: string) {
@@ -95,7 +96,7 @@ function formatCAD(value: number) {
   return `CAD $${value.toLocaleString("en-CA")}`;
 }
 
-export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps) {
+export function Dashboard({ orders, onNavigate, onUpdateOrder, language }: DashboardProps) {
   const [selectedOrder, setSelectedOrder] = useState<TransportOrder | null>(null);
   const [editingOrder, setEditingOrder] = useState<TransportOrder | null>(null);
   const recentTransportOrders = orders.slice(0, 7);
@@ -121,30 +122,31 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
             onUpdateOrder?.(order as TransportOrder);
             setSelectedOrder(order as TransportOrder);
           }}
+          language={language}
         />
       )}
-      {editingOrder && <OrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} onSave={saveOrder} />}
+      {editingOrder && <OrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} onSave={saveOrder} language={language} />}
 
       {/* KPI Row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
-        <KpiCard label="月营收" labelEn="Monthly Revenue" value="CAD $58.8K" sub="Mar 2026" trend={8.4} accent="#1C64F2"
+        <KpiCard label={pick(language, "月营收", "Monthly Revenue")} value="CAD $58.8K" sub={pick(language, "2026年3月", "Mar 2026")} trend={8.4} trendLabel={pick(language, "较上月", "vs last month")} accent="#1C64F2"
           icon={<DollarSign size={16} />} />
-        <KpiCard label="运输订单" labelEn="Transport Orders" value={String(orders.length)} sub="Apr 2026 + Nov 2025" trend={12.1} accent="#0D9488"
+        <KpiCard label={pick(language, "运输订单", "Transport Orders")} value={String(orders.length)} sub={pick(language, "2026年4月 + 2025年11月", "Apr 2026 + Nov 2025")} trend={12.1} trendLabel={pick(language, "较上月", "vs last month")} accent="#0D9488"
           icon={<Truck size={16} />} />
-        <KpiCard label="完成率" labelEn="Completion Rate" value="94.1%" sub="Delivered/POD" trend={1.2} accent="#10B981"
+        <KpiCard label={pick(language, "完成率", "Completion Rate")} value="94.1%" sub={pick(language, "已完成/POD", "Delivered/POD")} trend={1.2} trendLabel={pick(language, "较上月", "vs last month")} accent="#10B981"
           icon={<CheckCircle2 size={16} />} />
-        <KpiCard label="活跃司机" labelEn="Active Drivers" value="5" sub="AF/LH/AD/LF/WH" accent="#8B5CF6"
+        <KpiCard label={pick(language, "活跃司机", "Active Drivers")} value="5" sub="AF/LH/AD/LF/WH" accent="#8B5CF6"
           icon={<MapPin size={16} />} />
-        <KpiCard label="待开发票" labelEn="Pending Invoices" value="CAD $18.5K" sub="4 invoices" trend={-3.2} accent="#F59E0B"
+        <KpiCard label={pick(language, "待开发票", "Pending Invoices")} value="CAD $18.5K" sub={pick(language, "4张发票", "4 invoices")} trend={-3.2} trendLabel={pick(language, "较上月", "vs last month")} accent="#F59E0B"
           icon={<FileText size={16} />} />
-        <KpiCard label="拒收/异常" labelEn="Rejected/Exception" value="7" sub="需跟进" trend={-15.4} accent="#EF4444"
+        <KpiCard label={pick(language, "拒收/异常", "Rejected/Exception")} value="7" sub={pick(language, "需跟进", "Needs follow-up")} trend={-15.4} trendLabel={pick(language, "较上月", "vs last month")} accent="#EF4444"
           icon={<AlertTriangle size={16} />} />
       </div>
 
       {/* Main charts row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 300px" }}>
         <div className="bg-card rounded-xl border p-4" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <SectionHeader label="收入成本趋势" labelEn="Revenue & Cost (CAD $K)" action="详情 →" onAction={() => onNavigate?.("analytics")} />
+          <SectionHeader label={pick(language, "收入成本趋势", "Revenue & Cost (CAD $K)")} action={pick(language, "详情 →", "Details →")} onAction={() => onNavigate?.("analytics")} />
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={revenueData}>
               <defs>
@@ -161,28 +163,28 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={40} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} formatter={(v: number) => [`CAD $${v}K`, ""]} />
-              <Area key="area-revenue" type="monotone" dataKey="revenue" name="Revenue ($K)" stroke="#1C64F2" fill="url(#revenue)" strokeWidth={2} />
-              <Area key="area-profit" type="monotone" dataKey="profit" name="Gross Profit ($K)" stroke="#10B981" fill="url(#profit)" strokeWidth={2} />
+              <Area key="area-revenue" type="monotone" dataKey="revenue" name={pick(language, "收入（千加元）", "Revenue ($K)")} stroke="#1C64F2" fill="url(#revenue)" strokeWidth={2} />
+              <Area key="area-profit" type="monotone" dataKey="profit" name={pick(language, "毛利（千加元）", "Gross Profit ($K)")} stroke="#10B981" fill="url(#profit)" strokeWidth={2} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         <div className="bg-card rounded-xl border p-4" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <SectionHeader label="本周订单量" labelEn="Weekly Order Volume" />
+          <SectionHeader label={pick(language, "本周订单量", "Weekly Order Volume")} />
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={weeklyOrders} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={30} />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-              <Bar key="bar-orders" dataKey="orders" name="Orders" fill="#1C64F2" radius={[4, 4, 0, 0]} />
+              <Bar key="bar-orders" dataKey="orders" name={pick(language, "订单", "Orders")} fill="#1C64F2" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         <div className="bg-card rounded-xl border p-4" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-          <SectionHeader label="订单状态" labelEn="Order Status" />
+          <SectionHeader label={pick(language, "订单状态", "Order Status")} />
           <div className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={140}>
               <PieChart>
@@ -200,7 +202,7 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
                 <div key={i} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full" style={{ background: item.color }} />
-                    <span style={{ color: "var(--muted-foreground)", fontSize: 11 }}>{item.name}</span>
+                    <span style={{ color: "var(--muted-foreground)", fontSize: 11 }}>{pick(language, item.zh, item.en)}</span>
                   </div>
                   <span style={{ fontWeight: 600, fontFamily: "monospace" }}>{item.value}</span>
                 </div>
@@ -215,16 +217,15 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
         <div className="bg-card rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
           <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
             <div>
-              <span className="text-sm" style={{ fontWeight: 600 }}>最新运输订单</span>
-              <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>Recent Transport Orders</span>
+              <span className="text-sm" style={{ fontWeight: 600 }}>{pick(language, "最新运输订单", "Recent Transport Orders")}</span>
             </div>
-            <button onClick={() => onNavigate?.("orders")} className="text-xs hover:underline" style={{ color: "var(--primary)" }}>查看全部 →</button>
+            <button onClick={() => onNavigate?.("orders")} className="text-xs hover:underline" style={{ color: "var(--primary)" }}>{pick(language, "查看全部 →", "View All →")}</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-                  {["Order ID", "Customer", "Route", "Driver", "Status", "Amount (CAD)", "POD", "Date"].map((h, i) => (
+                  {(language === "en" ? ["Order ID", "Customer", "Route", "Driver", "Status", "Amount (CAD)", "POD", "Date"] : ["订单号", "客户", "路线", "司机", "状态", "金额(CAD)", "POD", "日期"]).map((h, i) => (
                     <th key={i} className="px-3 py-2.5 text-left" style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 500, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -243,13 +244,13 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
                     <td className="px-3 py-2.5">
                       <span className="px-2 py-0.5 rounded-full text-xs"
                         style={{ background: statusStyle[order.status]?.bg, color: statusStyle[order.status]?.color, fontWeight: 500, fontSize: 11 }}>
-                        {order.status}
+                        {orderStatusLabel(order.status, language)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5" style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 600, color: "#1D4ED8" }}>{order.amount}</td>
                     <td className="px-3 py-2.5">
                       <span className="text-xs" style={{ color: order.pod === "已签收" ? "#059669" : order.pod === "争议中" ? "#DC2626" : "var(--muted-foreground)" }}>
-                        {order.pod}
+                        {podLabel(order.pod, language)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)" }}>{order.created}</td>
@@ -263,7 +264,7 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
         <div className="space-y-4">
           {/* Client Performance */}
           <div className="bg-card rounded-xl border p-4" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-            <SectionHeader label="客户排名" labelEn="Client Performance" action="分析 →" onAction={() => onNavigate?.("analytics")} />
+            <SectionHeader label={pick(language, "客户排名", "Client Performance")} action={pick(language, "分析 →", "Analyze →")} onAction={() => onNavigate?.("analytics")} />
             <div className="space-y-2.5">
               {buPerformance.map((bu, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -291,7 +292,7 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
 
           {/* Top Drivers */}
           <div className="bg-card rounded-xl border p-4" style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-            <SectionHeader label="司机绩效榜" labelEn="Top Drivers" />
+            <SectionHeader label={pick(language, "司机绩效榜", "Top Drivers")} />
             <div className="space-y-2.5">
               {topDrivers.map((d, i) => (
                 <div key={i} className="flex items-center gap-2.5">
@@ -308,7 +309,7 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps)
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>{d.orders} runs</span>
+                      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>{d.orders} {pick(language, "趟", "runs")}</span>
                       <span style={{ fontSize: 10, color: "#059669" }}>{d.completion}</span>
                     </div>
                   </div>
