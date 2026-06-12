@@ -32,6 +32,13 @@ export function ReconciliationView() {
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
   const [rows, setRows] = useState<RecRow[]>(init);
   const [filter, setFilter] = useState<"all"|RecStatus>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ invoiceAmt: string; driverCost: string; status: RecStatus; note: string }>({
+    invoiceAmt: "",
+    driverCost: "",
+    status: "matched",
+    note: "",
+  });
 
   const totalAR    = rows.reduce((s,r)=>s+r.invoiceAmt,0);
   const totalAP    = rows.reduce((s,r)=>s+r.driverCost,0);
@@ -40,6 +47,39 @@ export function ReconciliationView() {
   const disputed   = rows.filter(r=>r.status==="disputed").length;
 
   const displayed = filter==="all" ? rows : rows.filter(r=>r.status===filter);
+
+  function startEdit(row: RecRow) {
+    setEditingId(row.id);
+    setDraft({
+      invoiceAmt: String(row.invoiceAmt),
+      driverCost: String(row.driverCost),
+      status: row.status,
+      note: row.note || "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft({ invoiceAmt: "", driverCost: "", status: "matched", note: "" });
+  }
+
+  function saveEdit(id: string) {
+    const invoiceAmt = Number(draft.invoiceAmt);
+    const driverCost = Number(draft.driverCost);
+    if (!Number.isFinite(invoiceAmt) || !Number.isFinite(driverCost) || invoiceAmt < 0 || driverCost < 0) {
+      toast.error("Enter valid non-negative invoice and driver cost amounts.");
+      return;
+    }
+    setRows(prev => prev.map(row => row.id === id ? {
+      ...row,
+      invoiceAmt,
+      driverCost,
+      status: draft.status,
+      note: draft.note.trim() || undefined,
+    } : row));
+    setEditingId(null);
+    toast.success(`${id} updated`);
+  }
 
   function matchRow(id: string) {
     setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:undefined}:r));
@@ -130,24 +170,57 @@ export function ReconciliationView() {
               const pct = r.invoiceAmt>0 ? ((gm/r.invoiceAmt)*100).toFixed(1) : "N/A";
               const s = sm[r.status];
               const alert = r.invoiceAmt===0 || gm<0;
+              const editing = editingId === r.id;
               return (
                 <tr key={r.id} style={{background:alert?"#fff5f5":"var(--card)"}} className="hover:bg-muted/30 transition-colors">
                   <td style={{...td,fontFamily:"monospace",fontWeight:700,color:"var(--primary)"}}>{r.id}</td>
                   <td style={{...td,fontWeight:600}}>{r.customer}</td>
                   <td style={{...td,fontFamily:"monospace",fontWeight:700,color:r.invoiceAmt===0?"#b91c1c":"#1d4ed8"}}>
-                    {r.invoiceAmt===0?"No Invoice":`$${r.invoiceAmt.toLocaleString()}`}
+                    {editing ? (
+                      <input type="number" min="0" value={draft.invoiceAmt} onChange={event => setDraft(current => ({ ...current, invoiceAmt: event.target.value }))}
+                        className="w-24 rounded-md border px-2 py-1 text-xs outline-none"
+                        style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
+                    ) : r.invoiceAmt===0?"No Invoice":`$${r.invoiceAmt.toLocaleString()}`}
                   </td>
-                  <td style={{...td,fontFamily:"monospace",color:"#8B5CF6"}}>${r.driverCost.toLocaleString()}</td>
+                  <td style={{...td,fontFamily:"monospace",color:"#8B5CF6"}}>
+                    {editing ? (
+                      <input type="number" min="0" value={draft.driverCost} onChange={event => setDraft(current => ({ ...current, driverCost: event.target.value }))}
+                        className="w-24 rounded-md border px-2 py-1 text-xs outline-none"
+                        style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
+                    ) : `$${r.driverCost.toLocaleString()}`}
+                  </td>
                   <td style={{...td,fontFamily:"monospace",fontWeight:700,color:gm<0?"#b91c1c":gm>800?"#047857":"var(--foreground)"}}>
                     {gm>=0?`$${gm.toLocaleString()}`:`-$${Math.abs(gm).toLocaleString()}`}
                   </td>
                   <td style={{...td,fontFamily:"monospace",color:Number(pct)>30?"#047857":Number(pct)<0?"#b91c1c":"var(--muted-foreground)"}}>
                     {pct}%
                   </td>
-                  <td style={td}><span style={{background:s.bg,color:s.color,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600}}>{s.label}</span></td>
-                  <td style={{...td,fontSize:11,color:"var(--muted-foreground)",maxWidth:160}}>{r.note||"—"}</td>
+                  <td style={td}>
+                    {editing ? (
+                      <select value={draft.status} onChange={event => setDraft(current => ({ ...current, status: event.target.value as RecStatus }))}
+                        className="rounded-md border px-2 py-1 text-xs outline-none"
+                        style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }}>
+                        {(["matched", "unmatched", "disputed"] as const).map(status => <option key={status} value={status}>{sm[status].labelEn}</option>)}
+                      </select>
+                    ) : (
+                      <span style={{background:s.bg,color:s.color,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600}}>{s.label}</span>
+                    )}
+                  </td>
+                  <td style={{...td,fontSize:11,color:"var(--muted-foreground)",maxWidth:220}}>
+                    {editing ? (
+                      <textarea value={draft.note} onChange={event => setDraft(current => ({ ...current, note: event.target.value }))}
+                        rows={2} placeholder="Add reconciliation note..."
+                        className="w-full resize-none rounded-md border px-2 py-1 text-xs outline-none"
+                        style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
+                    ) : r.note||"—"}
+                  </td>
                   <td style={td}>
                     <div className="flex gap-1.5 flex-wrap">
+                      {editing ? <>
+                        <button onClick={()=>saveEdit(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Save</button>
+                        <button onClick={cancelEdit} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Cancel</button>
+                      </> : <>
+                      <button onClick={()=>startEdit(r)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer",fontWeight:600}}>Edit</button>
                       {r.status==="unmatched" && <>
                         <button onClick={()=>matchRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>Match</button>
                         <button onClick={()=>disputeRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>Dispute</button>
@@ -158,6 +231,7 @@ export function ReconciliationView() {
                         <button onClick={()=>escalateRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>Escalate</button>
                       </>}
                       {r.status==="matched" && <span style={{fontSize:11,color:"#047857"}}>✓</span>}
+                      </>}
                     </div>
                   </td>
                 </tr>
