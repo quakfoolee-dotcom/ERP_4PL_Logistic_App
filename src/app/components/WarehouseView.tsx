@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
-import { Package, ArrowUpRight, ArrowDownRight, Warehouse, Scale } from "lucide-react";
+import { Package, ArrowUpRight, ArrowDownRight, Warehouse, Scale, Copy, FileText, CheckCircle2, Unlock } from "lucide-react";
 import { toast } from "sonner";
 
 // Real FBA container data from 2026 dispatch sheet (CAD)
@@ -46,13 +46,59 @@ const statusColors: Record<string, { bg: string; color: string }> = {
 };
 
 export function WarehouseView() {
-  const [selectedRow, setSelectedRow] = useState<typeof handlingFees[0] | null>(null);
+  const [rows, setRows] = useState(handlingFees);
+  const [selectedRow, setSelectedRow] = useState<typeof handlingFees[0] | null>(handlingFees[3] ?? null);
 
   function handleRowClick(row: typeof handlingFees[0]) {
     setSelectedRow(row);
-    toast.info(`${row.id} — ${row.type}`, {
-      description: `${row.units.toLocaleString()} units · ${row.pallets} · ${row.total} · Dest: ${row.dest} · Status: ${row.status}`,
+  }
+
+  function updateHandlingRow(id: string, patch: Partial<typeof handlingFees[0]>) {
+    setRows(prev => {
+      const next = prev.map(row => row.id === id ? { ...row, ...patch } : row);
+      setSelectedRow(next.find(row => row.id === id) ?? null);
+      return next;
     });
+  }
+
+  function settleHandling(row: typeof handlingFees[0]) {
+    updateHandlingRow(row.id, { status: "已结算" });
+    toast.success(`${row.id} settled`, { description: `${row.total} handling fee marked as settled.` });
+  }
+
+  function releaseHold(row: typeof handlingFees[0]) {
+    updateHandlingRow(row.id, { dispatched: "Pending dispatch" });
+    toast.success(`${row.id} released`, { description: "Dispatch status changed from HOLD to pending dispatch." });
+  }
+
+  function copyContainer(row: typeof handlingFees[0]) {
+    void navigator.clipboard?.writeText(row.id);
+    toast.success(`${row.id} copied`);
+  }
+
+  function exportWorkOrder(row: typeof handlingFees[0]) {
+    const details = [
+      `Container: ${row.id}`,
+      `FBA Shipment: ${row.fbaShipment}`,
+      `Operation: ${row.type}`,
+      `Units: ${row.units.toLocaleString()}`,
+      `CBM: ${row.cbm > 0 ? row.cbm : "-"}`,
+      `Pallets: ${row.pallets}`,
+      `Destination: ${row.dest}`,
+      `Extra Charges: ${row.repalletize}`,
+      `Total: ${row.total}`,
+      `Status: ${row.status}`,
+      `Arrived: ${row.arrived}`,
+      `Dispatched: ${row.dispatched}`,
+    ].join("\n");
+    const blob = new Blob([details], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${row.id}_work_order.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${row.id} work order exported`);
   }
 
   return (
@@ -101,8 +147,8 @@ export function WarehouseView() {
                 </tr>
               </thead>
               <tbody>
-                {handlingFees.map((row, i) => (
-                  <tr key={i} className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                {rows.map((row, i) => (
+                  <tr key={i} className="border-b hover:bg-muted/30 cursor-pointer transition-colors select-none"
                     style={{ borderColor: "var(--border)", background: selectedRow?.id === row.id ? "var(--secondary)" : undefined }}
                     onClick={() => handleRowClick(row)}>
                     <td className="px-3 py-2.5" style={{ fontSize: 11, fontFamily: "monospace", color: "var(--primary)", fontWeight: 600 }}>{row.id}</td>
@@ -185,6 +231,68 @@ export function WarehouseView() {
               })}
             </div>
           </div>
+
+          {selectedRow && (
+            <div className="bg-card rounded-xl border p-4 select-none"
+              style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+              <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: "var(--border)" }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace", color: "var(--primary)" }}>{selectedRow.id}</div>
+                  <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>{selectedRow.fbaShipment}</div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-xs whitespace-nowrap"
+                  style={{ background: statusColors[selectedRow.status]?.bg, color: statusColors[selectedRow.status]?.color, fontWeight: 600, fontSize: 11 }}>
+                  {selectedRow.status}
+                </span>
+              </div>
+
+              <div className="space-y-2 py-3">
+                {[
+                  ["Operation", selectedRow.type],
+                  ["Units", selectedRow.units.toLocaleString()],
+                  ["CBM", selectedRow.cbm > 0 ? String(selectedRow.cbm) : "—"],
+                  ["Pallets", selectedRow.pallets],
+                  ["Destination", selectedRow.dest],
+                  ["Extra Charges", selectedRow.repalletize],
+                  ["Total", selectedRow.total],
+                  ["Arrived", selectedRow.arrived],
+                  ["Dispatched", selectedRow.dispatched],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3 border-b py-1.5 text-xs" style={{ borderColor: "var(--border)" }}>
+                    <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
+                    <span className="text-right" style={{ fontWeight: 600, fontFamily: value.startsWith("CAD") || label === "Units" || label === "CBM" ? "monospace" : "inherit" }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                {selectedRow.status === "待结算" && (
+                  <button onClick={() => settleHandling(selectedRow)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs hover:opacity-90 transition-opacity"
+                    style={{ background: "var(--primary)", color: "white", fontWeight: 600 }}>
+                    <CheckCircle2 size={13} /> Settle
+                  </button>
+                )}
+                {selectedRow.dispatched === "HOLD" && (
+                  <button onClick={() => releaseHold(selectedRow)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs hover:opacity-90 transition-opacity"
+                    style={{ background: "#DC2626", color: "white", fontWeight: 600 }}>
+                    <Unlock size={13} /> Release
+                  </button>
+                )}
+                <button onClick={() => copyContainer(selectedRow)}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs hover:bg-muted transition-colors"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", fontWeight: 600 }}>
+                  <Copy size={13} /> Copy #
+                </button>
+                <button onClick={() => exportWorkOrder(selectedRow)}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs hover:bg-muted transition-colors"
+                  style={{ borderColor: "var(--border)", color: "var(--muted-foreground)", fontWeight: 600 }}>
+                  <FileText size={13} /> Work Order
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Fee breakdown */}
           <div className="bg-card rounded-xl border p-4"

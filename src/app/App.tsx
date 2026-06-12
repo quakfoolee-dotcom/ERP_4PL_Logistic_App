@@ -28,8 +28,10 @@ const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: st
   reimbursements: { title: "报销管理", titleEn: "Reimbursements" },
   quotes: { title: "合作方报价", titleEn: "Partner Quotes" },
   reconcile: { title: "结算对账", titleEn: "Reconciliation" },
+  warehouse: { title: "仓储管理", titleEn: "Warehouse" },
   handling: { title: "操作费管理", titleEn: "Handling Fees" },
   inventory: { title: "库存概览", titleEn: "Inventory Overview" },
+  finance: { title: "财务管理", titleEn: "Finance" },
   ar: { title: "应收发票", titleEn: "AR Invoices", addLabel: "新建发票" },
   ap: { title: "应付账款", titleEn: "AP Payables" },
   transfer: { title: "中转汇总", titleEn: "Transfer Summary" },
@@ -100,11 +102,13 @@ export default function App() {
     switch (activePage) {
       case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} />;
       case "orders": return <TransportOrders orders={orders} onUpdateOrder={updateOrder} onAddOrder={addOrder} externalSearch={globalOrderSearch} externalStatus={globalOrderStatus} />;
+      case "finance":
       case "ar":
       case "ap":
       case "transfer": return <FinanceView />;
       case "payroll":
       case "reimbursements": return <DriverPayroll />;
+      case "warehouse":
       case "handling": return <WarehouseView />;
       case "inventory": return <InventoryView />;
       case "analytics": return <AnalyticsView />;

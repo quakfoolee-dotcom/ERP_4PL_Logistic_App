@@ -211,16 +211,16 @@ export function FinanceView() {
                     style={{ color: currentStatus === "逾期" ? "#DC2626" : "var(--muted-foreground)", fontFamily: "monospace", fontWeight: currentStatus === "逾期" ? 600 : 400 }}>
                     {inv.due}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5 select-none">
                     {currentStatus === "待开具" ? (
-                      <button onClick={(e) => { e.stopPropagation(); issue(inv.id); toast.success(`Invoice ${inv.id} issued`, { description: `${inv.customer} · ${inv.total} issued` }); }}
-                        className="text-xs px-2 py-0.5 rounded hover:opacity-80 transition-opacity"
+                      <button onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); issue(inv.id); toast.success(`Invoice ${inv.id} issued`, { description: `${inv.customer} · ${inv.total} issued` }); }}
+                        className="inline-flex min-w-[104px] items-center justify-center rounded-md px-3 py-1.5 text-xs hover:opacity-90 transition-opacity"
                         style={{ background: "var(--primary)", color: "white", fontWeight: 500 }}>
                         Issue Invoice
                       </button>
                     ) : (
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
-                        className="text-xs px-2 py-0.5 rounded hover:bg-muted transition-colors"
+                      <button onMouseDown={(e) => e.preventDefault()} onClick={(e) => { e.stopPropagation(); setSelectedInvoice(inv); }}
+                        className="inline-flex min-w-[104px] items-center justify-center rounded-md px-3 py-1.5 text-xs hover:bg-muted transition-colors"
                         style={{ background: "var(--muted)", color: "var(--muted-foreground)", fontWeight: 500 }}>
                         View Detail
                       </button>

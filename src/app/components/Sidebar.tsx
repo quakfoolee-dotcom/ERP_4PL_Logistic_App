@@ -65,7 +65,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeKey, onSelect }: SidebarProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ transport: true, finance: true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ transport: true, warehouse: true, finance: true });
 
   const toggleExpand = (key: string) => {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
@@ -92,7 +92,10 @@ export function Sidebar({ activeKey, onSelect }: SidebarProps) {
           <div key={item.key}>
             <button
               onClick={() => {
-                if (item.children) toggleExpand(item.key);
+                if (item.children) {
+                  toggleExpand(item.key);
+                  onSelect(item.children[0].key);
+                }
                 else onSelect(item.key);
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg mb-0.5 transition-colors duration-150 text-left group"
