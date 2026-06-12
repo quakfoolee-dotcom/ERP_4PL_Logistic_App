@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src/imports/*.pdf
+.env
+.env.*
+npm-debug.log*
+.DS_Store
