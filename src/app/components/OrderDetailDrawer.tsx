@@ -35,18 +35,70 @@ const statusStyle: Record<string, { bg: string; color: string; icon: React.React
   "异常": { bg: "#FEE2E2", color: "#DC2626", icon: <AlertCircle size={13} /> },
 };
 
-const timeline = [
-  { time: "2025-06-28 09:12", event: "订单创建", detail: "系统自动创建运输订单", done: true },
-  { time: "2025-06-28 10:30", event: "已派车", detail: "已分配司机及车辆", done: true },
-  { time: "2025-06-28 14:00", event: "货物装载", detail: "货物已完成装载，启程", done: true },
-  { time: "2025-06-30 —", event: "运输中", detail: "车辆行驶途中，实时追踪", done: false },
-  { time: "预计 2025-07-02", event: "到达目的地", detail: "客户签收确认POD", done: false },
-];
+interface TimelineStep {
+  time: string;
+  event: string;
+  detail: string;
+  done: boolean;
+}
+
+function orderDate(order: Order) {
+  return order.created || order.date || order.eta || "—";
+}
+
+function hasSignedPod(order: Order) {
+  return order.pod === "已签收" || order.pod.toLowerCase() === "signed";
+}
+
+function buildOrderTimeline(order: Order): TimelineStep[] {
+  const created = orderDate(order);
+  const eta = order.eta || created;
+  const isPending = order.status === "待派送";
+  const isInTransit = order.status === "运输中";
+  const isCompleted = order.status === "已完成" || hasSignedPod(order);
+  const isException = order.status === "异常";
+  const isDispatched = !isPending;
+  const isMoving = isInTransit || isCompleted || isException;
+
+  return [
+    {
+      time: created === "—" ? "—" : `${created} 09:12`,
+      event: "订单创建",
+      detail: `系统已创建订单 ${order.id}`,
+      done: true,
+    },
+    {
+      time: isDispatched ? `${created} 10:30` : "等待派车",
+      event: isDispatched ? "已派车" : "待派车",
+      detail: isDispatched ? `已分配司机 ${order.driver}${order.vehicle ? ` / ${order.vehicle}` : ""}` : "等待分配司机及车辆",
+      done: isDispatched,
+    },
+    {
+      time: isDispatched ? `${created} 14:00` : "等待装载",
+      event: "货物装载",
+      detail: isDispatched ? `${order.pallets || "—"} 托盘已装载，路线 ${order.origin || "—"} → ${order.dest || "—"}` : "派车后同步装载时间",
+      done: isDispatched,
+    },
+    {
+      time: isMoving ? `${created} —` : "未启程",
+      event: isException ? "运输异常" : "运输中",
+      detail: isException ? `异常状态：${order.pod}` : isMoving ? "车辆行驶途中，实时追踪" : "车辆尚未启程",
+      done: isMoving,
+    },
+    {
+      time: isCompleted ? eta : `预计 ${eta}`,
+      event: isCompleted ? "已到达目的地" : "到达目的地",
+      detail: isCompleted ? `客户签收确认POD：${order.pod}` : `等待客户签收确认POD：${order.pod}`,
+      done: isCompleted,
+    },
+  ];
+}
 
 export function OrderDetailDrawer({ order, onClose, onEdit, onUpdate }: OrderDetailDrawerProps) {
   const st = statusStyle[order.status] || statusStyle["运输中"];
   const origin = order.origin || (order.route ? order.route.split(" → ")[0] : "—");
   const dest = order.dest || (order.route ? order.route.split(" → ")[1] : "—");
+  const timeline = buildOrderTimeline(order);
 
   return (
     <>
