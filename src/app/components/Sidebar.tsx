@@ -5,6 +5,7 @@ import {
   Building2, BarChart3, Settings, ChevronDown, ChevronRight,
   Warehouse, CreditCard, ClipboardCheck, DollarSign, Globe
 } from "lucide-react";
+import type { AppLanguage } from "../App";
 
 interface NavItem {
   icon: React.ReactNode;
@@ -62,9 +63,10 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   activeKey: string;
   onSelect: (key: string) => void;
+  language: AppLanguage;
 }
 
-export function Sidebar({ activeKey, onSelect }: SidebarProps) {
+export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ transport: true, warehouse: true, finance: true });
 
   const toggleExpand = (key: string) => {
@@ -81,7 +83,7 @@ export function Sidebar({ activeKey, onSelect }: SidebarProps) {
         <div>
           <div className="text-white text-xs leading-none" style={{ fontWeight: 600 }}>枫途物流 Canada</div>
           <div className="text-xs leading-none mt-0.5" style={{ color: "var(--sidebar-foreground)", opacity: 0.6, fontSize: 10 }}>
-            GTA 4PL · FBA Logistics
+            {language === "en" ? "GTA 4PL · FBA Logistics" : "GTA 4PL · FBA物流"}
           </div>
         </div>
       </div>
@@ -114,8 +116,8 @@ export function Sidebar({ activeKey, onSelect }: SidebarProps) {
             >
               <span style={{ opacity: 0.8 }}>{item.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-xs" style={{ fontWeight: 500, lineHeight: 1.3 }}>{item.label}</div>
-                <div style={{ fontSize: 10, opacity: 0.5, lineHeight: 1.2 }}>{item.labelEn}</div>
+                <div className="text-xs" style={{ fontWeight: 500, lineHeight: 1.3 }}>{language === "en" ? item.labelEn : item.label}</div>
+                <div style={{ fontSize: 10, opacity: 0.5, lineHeight: 1.2 }}>{language === "en" ? item.label : item.labelEn}</div>
               </div>
               {item.children && (
                 <span style={{ opacity: 0.5 }}>
@@ -145,7 +147,7 @@ export function Sidebar({ activeKey, onSelect }: SidebarProps) {
                   >
                     <div className="w-1 h-1 rounded-full" style={{ background: activeKey === child.key ? "white" : "currentColor", opacity: 0.4 }} />
                     <div className="flex-1 min-w-0">
-                      <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}>{child.label}</div>
+                      <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}>{language === "en" ? child.labelEn : child.label}</div>
                     </div>
                   </button>
                 ))}
@@ -159,7 +161,7 @@ export function Sidebar({ activeKey, onSelect }: SidebarProps) {
       <div className="px-3 py-3 border-t" style={{ borderColor: "var(--sidebar-border)" }}>
         <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer"
           style={{ background: "rgba(255,255,255,0.04)" }}
-          onClick={() => toast.info("Ops Team — Brampton Hub Manager", { description: "Role: Operations · Hub: Brampton, ON · Session active" })}>
+          onClick={() => toast.info("Ops Team — Brampton Hub Manager", { description: language === "en" ? "Role: Operations · Hub: Brampton, ON · Session active" : "角色：运营 · 仓库：Brampton, ON · 会话在线" })}>
           <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs" style={{ fontWeight: 600 }}>
             OP
           </div>

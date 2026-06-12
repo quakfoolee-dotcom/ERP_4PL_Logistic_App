@@ -18,12 +18,14 @@ import { ComplianceView } from "./components/ComplianceView";
 import { SettingsView } from "./components/SettingsView";
 import { initialTransportOrders, type TransportOrder } from "./data/transportOrders";
 
-const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: string }> = {
+export type AppLanguage = "zh" | "en";
+
+const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: string; addLabelEn?: string }> = {
   dashboard: { title: "运营控制台", titleEn: "Operations Dashboard" },
-  orders: { title: "运输订单", titleEn: "Transport Orders", addLabel: "新建订单" },
+  orders: { title: "运输订单", titleEn: "Transport Orders", addLabel: "新建订单", addLabelEn: "New Order" },
   tracking: { title: "在途追踪", titleEn: "Live Tracking" },
   pod: { title: "POD管理", titleEn: "POD Management" },
-  profiles: { title: "司机档案", titleEn: "Driver Profiles", addLabel: "新增司机" },
+  profiles: { title: "司机档案", titleEn: "Driver Profiles", addLabel: "新增司机", addLabelEn: "New Driver" },
   payroll: { title: "薪资结算", titleEn: "Driver Payroll" },
   reimbursements: { title: "报销管理", titleEn: "Reimbursements" },
   quotes: { title: "合作方报价", titleEn: "Partner Quotes" },
@@ -32,7 +34,7 @@ const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: st
   handling: { title: "操作费管理", titleEn: "Handling Fees" },
   inventory: { title: "库存概览", titleEn: "Inventory Overview" },
   finance: { title: "财务管理", titleEn: "Finance" },
-  ar: { title: "应收发票", titleEn: "AR Invoices", addLabel: "新建发票" },
+  ar: { title: "应收发票", titleEn: "AR Invoices", addLabel: "新建发票", addLabelEn: "New Invoice" },
   ap: { title: "应付账款", titleEn: "AP Payables" },
   transfer: { title: "中转汇总", titleEn: "Transfer Summary" },
   analytics: { title: "业务分析", titleEn: "Analytics & BI" },
@@ -54,6 +56,13 @@ function PlaceholderView({ title, titleEn }: { title: string; titleEn: string })
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [language, setLanguage] = useState<AppLanguage>(() => {
+    try {
+      return window.localStorage.getItem("erp4pl.language") === "en" ? "en" : "zh";
+    } catch {
+      return "zh";
+    }
+  });
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [globalOrderSearch, setGlobalOrderSearch] = useState("");
   const [globalOrderStatus, setGlobalOrderStatus] = useState("全部");
@@ -71,6 +80,11 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem("erp4pl.transportOrders", JSON.stringify(orders));
   }, [orders]);
+
+  useEffect(() => {
+    window.localStorage.setItem("erp4pl.language", language);
+    document.documentElement.lang = language === "en" ? "en" : "zh-Hans";
+  }, [language]);
 
   function exportOrders() {
     const header = ["Order ID", "Customer", "Origin", "Destination", "Driver", "Type", "Pallets", "Status", "Revenue", "Cost", "Profit", "POD", "ETA", "Created"];
@@ -125,14 +139,16 @@ export default function App() {
 
   return (
     <div className="erp-shell flex h-screen w-full overflow-hidden" style={{ background: "var(--background)", minWidth: 0 }}>
-      <Sidebar activeKey={activePage} onSelect={setActivePage} />
+      <Sidebar activeKey={activePage} onSelect={setActivePage} language={language} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar
-          title={page.title}
-          titleEn={page.titleEn}
-          addLabel={page.addLabel}
-          onAdd={page.addLabel ? () => setShowNewOrder(true) : undefined}
+          title={language === "en" ? page.titleEn : page.title}
+          titleEn={language === "en" ? page.title : page.titleEn}
+          language={language}
+          onToggleLanguage={() => setLanguage((current) => current === "en" ? "zh" : "en")}
+          addLabel={language === "en" ? page.addLabelEn : page.addLabel}
+          onAdd={page.addLabel || page.addLabelEn ? () => setShowNewOrder(true) : undefined}
           onExport={exportOrders}
           onSearch={setGlobalOrderSearch}
           activeStatusFilter={globalOrderStatus}
