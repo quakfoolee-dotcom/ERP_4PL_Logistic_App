@@ -148,7 +148,7 @@ export function OrderDetailDrawer({ order, onClose, onEdit, onUpdate }: OrderDet
 
         {/* Footer actions */}
         <div className="flex gap-2 px-5 py-4 border-t" style={{ borderColor: "var(--border)" }}>
-          <button onClick={onEdit} className="flex-1 py-2 rounded-lg border text-xs transition-colors hover:bg-muted"
+          <button onClick={onEdit} disabled={!onEdit} className="flex-1 py-2 rounded-lg border text-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
             编辑订单
           </button>

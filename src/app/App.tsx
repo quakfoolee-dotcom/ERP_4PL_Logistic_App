@@ -100,7 +100,7 @@ export default function App() {
 
   function renderContent() {
     switch (activePage) {
-      case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} />;
+      case "dashboard": return <Dashboard orders={orders} onNavigate={setActivePage} onUpdateOrder={updateOrder} />;
       case "orders": return <TransportOrders orders={orders} onUpdateOrder={updateOrder} onAddOrder={addOrder} externalSearch={globalOrderSearch} externalStatus={globalOrderStatus} />;
       case "finance":
       case "ar":

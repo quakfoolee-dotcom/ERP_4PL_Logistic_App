@@ -333,7 +333,7 @@ function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: 
   );
 }
 
-function OrderEditModal({ order, onClose, onSave }: { order: TransportOrder; onClose: () => void; onSave: (order: TransportOrder) => void }) {
+export function OrderEditModal({ order, onClose, onSave }: { order: TransportOrder; onClose: () => void; onSave: (order: TransportOrder) => void }) {
   const [draft, setDraft] = useState(order);
   const set = (key: keyof TransportOrder, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const revenue = moneyValue(draft.amount);

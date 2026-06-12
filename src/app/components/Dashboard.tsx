@@ -8,7 +8,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { OrderDetailDrawer } from "./OrderDetailDrawer";
+import { OrderEditModal } from "./TransportOrders";
 import type { TransportOrder } from "../data/transportOrders";
+import { toast } from "sonner";
 
 // Monthly revenue (CAD $K) — Brampton 4PL FBA ops Jan–Jun 2026
 const revenueData = [
@@ -82,11 +84,31 @@ function SectionHeader({ label, labelEn, action, onAction }: { label: string; la
 interface DashboardProps {
   orders: TransportOrder[];
   onNavigate?: (page: string) => void;
+  onUpdateOrder?: (order: TransportOrder) => void;
 }
 
-export function Dashboard({ orders, onNavigate }: DashboardProps) {
+function moneyValue(value: string) {
+  return Number(value.replace(/[^0-9.-]/g, "")) || 0;
+}
+
+function formatCAD(value: number) {
+  return `CAD $${value.toLocaleString("en-CA")}`;
+}
+
+export function Dashboard({ orders, onNavigate, onUpdateOrder }: DashboardProps) {
   const [selectedOrder, setSelectedOrder] = useState<TransportOrder | null>(null);
+  const [editingOrder, setEditingOrder] = useState<TransportOrder | null>(null);
   const recentTransportOrders = orders.slice(0, 7);
+
+  function saveOrder(order: TransportOrder) {
+    const revenue = moneyValue(order.amount);
+    const cost = moneyValue(order.cost);
+    const updated = { ...order, profit: formatCAD(revenue - cost) };
+    onUpdateOrder?.(updated);
+    setSelectedOrder((current) => current?.id === order.id ? updated : current);
+    setEditingOrder(null);
+    toast.success(`${order.id} updated`);
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -94,8 +116,14 @@ export function Dashboard({ orders, onNavigate }: DashboardProps) {
         <OrderDetailDrawer
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
+          onEdit={() => setEditingOrder(selectedOrder)}
+          onUpdate={(order) => {
+            onUpdateOrder?.(order as TransportOrder);
+            setSelectedOrder(order as TransportOrder);
+          }}
         />
       )}
+      {editingOrder && <OrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} onSave={saveOrder} />}
 
       {/* KPI Row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
