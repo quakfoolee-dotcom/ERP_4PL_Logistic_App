@@ -107,6 +107,29 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
     toast.success(pick(language, "应付账款已批准", "Payable approved"));
   }
 
+  function updateInvoiceStatus(id: string, status: StatusKey) {
+    setInvoiceStatuses((previous) => ({ ...previous, [id]: status }));
+    toast.success(pick(language, "发票状态已更新", "Invoice status updated"));
+  }
+
+  function updatePayableStatus(id: string, status: StatusKey) {
+    setPayableStatuses((previous) => ({ ...previous, [id]: status }));
+    toast.success(pick(language, "应付状态已更新", "Payable status updated"));
+  }
+
+  function updateTransferStatus(id: string, status: StatusKey) {
+    const today = new Date().toLocaleDateString("en-CA");
+    setTransferRows((current) => current.map((transfer) => {
+      if (transfer.id !== id) return transfer;
+      return {
+        ...transfer,
+        status,
+        settled: status === "completed" ? (transfer.settled === "Pending" ? today : transfer.settled) : status === "pending" ? "Pending" : transfer.settled,
+      };
+    }));
+    toast.success(pick(language, "中转状态已更新", "Transfer status updated"));
+  }
+
   function createInvoice(invoice: InvoiceRow) {
     setInvoiceRows((current) => [invoice, ...current]);
     setInvoiceStatuses((previous) => ({ ...previous, [invoice.id]: "pending" }));
@@ -182,6 +205,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
           language={language}
           invoices={invoiceRows}
           invoiceStatus={invoiceStatus}
+          onStatusChange={updateInvoiceStatus}
           onIssue={issue}
           onBatchIssue={batchIssue}
           onSelectInvoice={setSelectedInvoice}
@@ -193,6 +217,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
           language={language}
           payables={payableRows}
           payableStatus={payableStatus}
+          onStatusChange={updatePayableStatus}
           onApprove={approvePayable}
           onSelectPayable={setSelectedPayable}
           onExport={exportCurrentSection}
@@ -202,6 +227,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
         <TransferSummary
           language={language}
           transfers={transferRows}
+          onStatusChange={updateTransferStatus}
           onSelectTransfer={setSelectedTransfer}
           onSettle={markTransferSettled}
           onExport={exportCurrentSection}
@@ -254,10 +280,11 @@ function FinanceOverview({ language }: { language: AppLanguage }) {
   );
 }
 
-function ARInvoices({ language, invoices, invoiceStatus, onIssue, onBatchIssue, onSelectInvoice, onExport }: {
+function ARInvoices({ language, invoices, invoiceStatus, onStatusChange, onIssue, onBatchIssue, onSelectInvoice, onExport }: {
   language: AppLanguage;
   invoices: InvoiceRow[];
   invoiceStatus: (invoice: InvoiceRow) => StatusKey;
+  onStatusChange: (id: string, status: StatusKey) => void;
   onIssue: (id: string) => void;
   onBatchIssue: () => void;
   onSelectInvoice: (invoice: InvoiceRow) => void;
@@ -291,7 +318,7 @@ function ARInvoices({ language, invoices, invoiceStatus, onIssue, onBatchIssue, 
               <Mono key="amount">{invoice.amount}</Mono>,
               <MutedMono key="tax">{invoice.tax}</MutedMono>,
               <StrongMono key="total">{invoice.total}</StrongMono>,
-              <StatusPill key="status" status={currentStatus} language={language} />,
+              <StatusSelect key="status" status={currentStatus} language={language} options={["pending", "issued", "paid", "overdue"]} onChange={(status) => onStatusChange(invoice.id, status)} />,
               <span key="due" style={{ color: currentStatus === "overdue" ? "#DC2626" : "var(--muted-foreground)", fontFamily: "monospace", fontWeight: currentStatus === "overdue" ? 700 : 400 }}>{invoice.due}</span>,
               currentStatus === "pending"
                 ? <ActionButton key="action" label={pick(language, "开具发票", "Issue Invoice")} primary onClick={() => { onIssue(invoice.id); toast.success(pick(language, `发票 ${invoice.id} 已开具`, `Invoice ${invoice.id} issued`)); }} />
@@ -304,10 +331,11 @@ function ARInvoices({ language, invoices, invoiceStatus, onIssue, onBatchIssue, 
   );
 }
 
-function APPayables({ language, payables, payableStatus, onApprove, onSelectPayable, onExport }: {
+function APPayables({ language, payables, payableStatus, onStatusChange, onApprove, onSelectPayable, onExport }: {
   language: AppLanguage;
   payables: PayableRow[];
   payableStatus: (payable: PayableRow) => StatusKey;
+  onStatusChange: (id: string, status: StatusKey) => void;
   onApprove: (id: string) => void;
   onSelectPayable: (payable: PayableRow) => void;
   onExport: () => void;
@@ -341,7 +369,7 @@ function APPayables({ language, payables, payableStatus, onApprove, onSelectPaya
               <Mono key="subtotal">{payable.subtotal}</Mono>,
               <MutedMono key="tax">{payable.tax}</MutedMono>,
               <StrongMono key="total">{payable.total}</StrongMono>,
-              <StatusPill key="status" status={currentStatus} language={language} />,
+              <StatusSelect key="status" status={currentStatus} language={language} options={["scheduled", "approved", "paid", "overdue"]} onChange={(status) => onStatusChange(payable.id, status)} />,
               <span key="due" style={{ color: currentStatus === "overdue" ? "#DC2626" : "var(--muted-foreground)", fontFamily: "monospace", fontWeight: currentStatus === "overdue" ? 700 : 400 }}>{payable.due}</span>,
               currentStatus === "scheduled"
                 ? <ActionButton key="action" label={pick(language, "批准", "Approve")} primary onClick={() => onApprove(payable.id)} />
@@ -354,9 +382,10 @@ function APPayables({ language, payables, payableStatus, onApprove, onSelectPaya
   );
 }
 
-function TransferSummary({ language, transfers, onSelectTransfer, onSettle, onExport }: {
+function TransferSummary({ language, transfers, onStatusChange, onSelectTransfer, onSettle, onExport }: {
   language: AppLanguage;
   transfers: TransferRow[];
+  onStatusChange: (id: string, status: StatusKey) => void;
   onSelectTransfer: (transfer: TransferRow) => void;
   onSettle: (id: string) => void;
   onExport: () => void;
@@ -387,7 +416,7 @@ function TransferSummary({ language, transfers, onSelectTransfer, onSettle, onEx
               <StrongMono key="revenue">{transfer.revenue}</StrongMono>,
               <MutedMono key="cost">{transfer.cost}</MutedMono>,
               <StrongMono key="margin">{transfer.margin}</StrongMono>,
-              <StatusPill key="status" status={transfer.status} language={language} />,
+              <StatusSelect key="status" status={transfer.status} language={language} options={["pending", "issued", "completed"]} onChange={(status) => onStatusChange(transfer.id, status)} />,
               <span key="settled" style={{ color: transfer.settled === "Pending" ? "#B45309" : "var(--muted-foreground)", fontFamily: "monospace" }}>{transfer.settled}</span>,
               transfer.status === "pending"
                 ? <ActionButton key="action" label={pick(language, "结算", "Settle")} primary onClick={() => onSettle(transfer.id)} />
@@ -497,6 +526,33 @@ function StatusPill({ status, language }: { status: StatusKey; language: AppLang
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5" style={{ background: meta.bg, color: meta.color, fontWeight: 700, fontSize: 11 }}>
       {meta.icon}{statusLabel(status, language)}
     </span>
+  );
+}
+
+function StatusSelect({ status, language, options, onChange }: { status: StatusKey; language: AppLanguage; options: StatusKey[]; onChange: (status: StatusKey) => void }) {
+  const meta = statusMeta[status];
+  return (
+    <select
+      value={status}
+      onChange={(event) => onChange(event.target.value as StatusKey)}
+      aria-label={pick(language, "更新状态", "Update status")}
+      style={{
+        background: meta.bg,
+        color: meta.color,
+        border: "none",
+        borderRadius: 999,
+        padding: "3px 26px 3px 9px",
+        fontSize: 11,
+        fontWeight: 800,
+        minWidth: 108,
+        cursor: "pointer",
+        outline: "none",
+      }}
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>{statusLabel(option, language)}</option>
+      ))}
+    </select>
   );
 }
 
