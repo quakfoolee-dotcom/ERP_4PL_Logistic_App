@@ -3,8 +3,10 @@ import { DollarSign, AlertTriangle, CheckCircle2, TrendingUp, XCircle, Download 
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import { pick, type AppLanguage } from "../i18n";
+import { buildFinanceProjection, type ReconciliationStatus } from "../domain/financeProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
 
-type RecStatus = "matched" | "unmatched" | "disputed";
+type RecStatus = ReconciliationStatus;
 interface RecRow { id: string; customer: string; invoiceAmt: number; driverCost: number; status: RecStatus; note?: string; }
 
 const init: RecRow[] = [
@@ -31,7 +33,7 @@ const td: React.CSSProperties = { padding:"10px 12px", fontSize:12, borderBottom
 
 export function ReconciliationView({ language }: { language: AppLanguage }) {
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
-  const [rows, setRows] = useState<RecRow[]>(init);
+  const [rows, setRows] = useState<RecRow[]>(() => buildFinanceProjection(demoErpSeed).reconciliationRows);
   const [filter, setFilter] = useState<"all"|RecStatus>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ invoiceAmt: string; driverCost: string; status: RecStatus; note: string }>({

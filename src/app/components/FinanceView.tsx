@@ -7,50 +7,19 @@ import { AlertCircle, CheckCircle2, Clock, Download, FileText, Send, X } from "l
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
+import { buildFinanceProjection, summarizeFinance, type FinanceStatusKey } from "../domain/financeProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
 
 type FinanceSection = "finance" | "ar" | "ap" | "transfer";
-type StatusKey = "pending" | "issued" | "paid" | "overdue" | "approved" | "scheduled" | "completed";
+type StatusKey = FinanceStatusKey;
 
-const invoices = [
-  { id: "2026-0140", customer: "HMMU4464340", period: "2026-04", orders: 1, amount: "CAD $2,018", tax: "CAD $263", total: "CAD $2,281", status: "pending" as StatusKey, due: "2026-05-30" },
-  { id: "2026-0139", customer: "BEAU6280647", period: "2026-04", orders: 2, amount: "CAD $2,573", tax: "CAD $335", total: "CAD $2,908", status: "pending" as StatusKey, due: "2026-05-28" },
-  { id: "2026-0138", customer: "HMMU7089094", period: "2026-04", orders: 1, amount: "CAD $2,065", tax: "CAD $268", total: "CAD $2,333", status: "issued" as StatusKey, due: "2026-05-25" },
-  { id: "2026-0137", customer: "ZCSU6522960", period: "2026-03", orders: 3, amount: "CAD $3,279", tax: "CAD $426", total: "CAD $3,705", status: "paid" as StatusKey, due: "2026-04-30" },
-  { id: "2026-0136", customer: "AP-PDN", period: "2025-11", orders: 2, amount: "CAD $2,178", tax: "CAD $283", total: "CAD $2,461", status: "paid" as StatusKey, due: "2025-12-31" },
-  { id: "2026-0135", customer: "CSGU6675337", period: "2026-04", orders: 1, amount: "CAD $2,966", tax: "CAD $386", total: "CAD $3,352", status: "overdue" as StatusKey, due: "2026-05-15" },
-];
-
-const payables = [
-  { id: "AP-2026-0088", vendor: "AF Driver", category: "Linehaul", period: "2026-04", runs: 18, subtotal: "CAD $5,720", tax: "CAD $744", total: "CAD $6,464", status: "scheduled" as StatusKey, due: "2026-05-12" },
-  { id: "AP-2026-0087", vendor: "LH Driver", category: "FBA Delivery", period: "2026-04", runs: 22, subtotal: "CAD $4,560", tax: "CAD $593", total: "CAD $5,153", status: "approved" as StatusKey, due: "2026-05-10" },
-  { id: "AP-2026-0086", vendor: "AD Straightship", category: "Daily Runs", period: "2026-04", runs: 31, subtotal: "CAD $5,510", tax: "CAD $716", total: "CAD $6,226", status: "paid" as StatusKey, due: "2026-05-05" },
-  { id: "AP-2026-0085", vendor: "LF Driver", category: "Local Delivery", period: "2026-04", runs: 12, subtotal: "CAD $2,790", tax: "CAD $363", total: "CAD $3,153", status: "overdue" as StatusKey, due: "2026-05-01" },
-  { id: "AP-2026-0084", vendor: "WH Jeff", category: "Sysco Runs", period: "2026-04", runs: 15, subtotal: "CAD $3,375", tax: "CAD $439", total: "CAD $3,814", status: "paid" as StatusKey, due: "2026-04-28" },
-];
-
-const transfers = [
-  { id: "TR-2604-001", lane: "Brampton #25 -> YYZ9 Amazon", partner: "LH / AF", runs: 49, revenue: "CAD $3,279", cost: "CAD $2,010", margin: "CAD $1,269", status: "completed" as StatusKey, settled: "2026-04-24" },
-  { id: "TR-2604-002", lane: "Brampton #10 -> YHM1 Hamilton", partner: "LH", runs: 36, revenue: "CAD $2,066", cost: "CAD $1,480", margin: "CAD $586", status: "completed" as StatusKey, settled: "2026-04-23" },
-  { id: "TR-2604-003", lane: "Airport Pickup -> CBWS", partner: "AD Straightship", runs: 12, revenue: "CAD $2,400", cost: "CAD $1,800", margin: "CAD $600", status: "issued" as StatusKey, settled: "2026-05-03" },
-  { id: "TR-2604-004", lane: "Brampton -> YOW1/YOW3", partner: "AF Driver", runs: 14, revenue: "CAD $1,150", cost: "CAD $930", margin: "CAD $220", status: "pending" as StatusKey, settled: "Pending" },
-];
-
-const monthlyFlow = [
-  { month: "Jan", ar: 38.4, ap: 26.8, net: 11.6 },
-  { month: "Feb", ar: 42.6, ap: 29.4, net: 13.2 },
-  { month: "Mar", ar: 58.8, ap: 39.6, net: 19.2 },
-  { month: "Apr", ar: 62.4, ap: 42.1, net: 20.3 },
-  { month: "May", ar: 56.7, ap: 38.2, net: 18.5 },
-  { month: "Jun", ar: 49.2, ap: 32.8, net: 16.4 },
-];
-
-const settlementSummary = [
-  { partner: "AD Straightship Daily", orders: 88, amount: "CAD $5,510", settled: "CAD $5,510", pending: "-", rate: 100 },
-  { partner: "LH Driver", orders: 38, amount: "CAD $4,560", settled: "CAD $4,560", pending: "-", rate: 100 },
-  { partner: "AF Driver", orders: 52, amount: "CAD $6,240", settled: "CAD $5,720", pending: "CAD $520", rate: 92 },
-  { partner: "WH Jeff (Sysco)", orders: 45, amount: "CAD $3,375", settled: "CAD $3,375", pending: "-", rate: 100 },
-  { partner: "LF Driver", orders: 31, amount: "CAD $3,720", settled: "CAD $2,790", pending: "CAD $930", rate: 75 },
-];
+const financeProjection = buildFinanceProjection(demoErpSeed);
+const financeSummary = summarizeFinance(financeProjection);
+const invoices = financeProjection.invoices;
+const payables = financeProjection.payables;
+const transfers = financeProjection.transfers;
+const monthlyFlow = financeProjection.monthlyFlow;
+const settlementSummary = financeProjection.settlementSummary;
 
 const statusMeta: Record<StatusKey, { zh: string; en: string; bg: string; color: string; icon: ReactNode }> = {
   pending: { zh: "待处理", en: "Pending", bg: "#FEF3C7", color: "#B45309", icon: <Clock size={11} /> },
