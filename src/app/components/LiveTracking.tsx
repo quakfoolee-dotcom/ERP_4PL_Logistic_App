@@ -3,6 +3,12 @@ import { AlertTriangle, RefreshCw, MapPin, Truck, X, ChevronRight, CheckCircle2,
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import type { AppLanguage } from "../i18n";
+import { buildOperationsProjection } from "../domain/operationsProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
+
+const operationsProjection = buildOperationsProjection(demoErpSeed);
+const projectedContainers = operationsProjection.liveContainers;
+const projectedAppointments = operationsProjection.appointments;
 
 const initContainers = [
   { id: "ZCSU6522960", pallets: 49, dest: "YYZ9", driver: "LH+AF+JH", departed: "2026-04-05", eta: "2026-04-08", status: "delivered", notes: "3 trips dispatched: 26P LH, 23P AF, 4P JH. All confirmed at YYZ9." },
@@ -35,10 +41,10 @@ const td: React.CSSProperties = { padding: "10px 12px", fontSize: 12, borderBott
 export function LiveTracking({ language = "zh" }: { language?: AppLanguage }) {
   void language;
   const { promptDialog, ActionDialog } = useActionDialog();
-  const [containers, setContainers] = useState(initContainers);
-  const [appts, setAppts]           = useState(initAppts);
+  const [containers, setContainers] = useState(projectedContainers);
+  const [appts, setAppts]           = useState(projectedAppointments);
   const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString("en-CA"));
-  const [selected, setSelected]     = useState<typeof initContainers[0] | null>(null);
+  const [selected, setSelected]     = useState<typeof projectedContainers[0] | null>(null);
 
   const onRoute   = containers.filter(c => c.status === "on-route").length;
   const delivered = containers.filter(c => c.status === "delivered").length;

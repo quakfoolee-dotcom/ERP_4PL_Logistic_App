@@ -5,6 +5,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import type { AppLanguage } from "../i18n";
+import { buildOperationsProjection } from "../domain/operationsProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
+
+const operationsProjection = buildOperationsProjection(demoErpSeed);
+const projectedPayrollDrivers = operationsProjection.payrollDrivers;
+const projectedReimbursements = operationsProjection.reimbursements;
 
 // Real drivers from Nov 2025 transport log — CAD
 const drivers = [
@@ -15,7 +21,7 @@ const drivers = [
   { id: "DRV-WH", name: "WH (Jeff)", phone: "905-***-**92", vehicle: "小车 Transit Van", type: "Sysco / Warehouse", orders: 45, distance: "3,120km", rating: 4.9, base: "CAD $3,000", bonus: "CAD $375", fuel: "CAD $0", other: "CAD $0", total: "CAD $3,375", status: "已结算", period: "2025-11" },
 ];
 
-const earningsData = drivers.map(d => ({
+const earningsData = projectedPayrollDrivers.map(d => ({
   name: d.name.split(" ")[0],
   "Base Pay": parseInt(d.base.replace(/[^0-9]/g, "")),
   "Bonus/Wait": parseInt(d.bonus.replace(/[^0-9]/g, "")),
@@ -60,7 +66,7 @@ export function DriverPayroll({ language = "zh" }: { language?: AppLanguage }) {
   function settleAll() {
     const updates: Record<string, string> = {};
     let count = 0;
-    drivers.forEach(d => { if ((driverStatuses[d.id] ?? d.status) === "待结算") { updates[d.id] = "已结算"; count++; } });
+    projectedPayrollDrivers.forEach(d => { if ((driverStatuses[d.id] ?? d.status) === "待结算") { updates[d.id] = "已结算"; count++; } });
     setDriverStatuses(prev => ({ ...prev, ...updates }));
     if (count > 0) toast.success(`Settled ${count} driver${count > 1 ? "s" : ""}`, { description: "All pending payroll marked as settled." });
     else toast.info("No pending drivers to settle");
@@ -112,7 +118,7 @@ export function DriverPayroll({ language = "zh" }: { language?: AppLanguage }) {
                 </tr>
               </thead>
               <tbody>
-                {drivers.map((d, i) => (
+                {projectedPayrollDrivers.map((d, i) => (
                   <tr key={i} className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
                     style={{ borderColor: "var(--border)" }}
                     onClick={() => toast.info(`${d.name} — Payroll Detail`, { description: `${d.orders} runs · ${d.distance} · Total: ${d.total} · Status: ${getDriverStatus(d.id, d.status)}` })}>
@@ -180,7 +186,7 @@ export function DriverPayroll({ language = "zh" }: { language?: AppLanguage }) {
                 </tr>
               </thead>
               <tbody>
-                {reimbursements.map((r, i) => (
+                {projectedReimbursements.map((r, i) => (
                   <tr key={i} className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
                     style={{ borderColor: "var(--border)" }}
                     onClick={() => toast.info(`${r.id} — ${r.type}`, { description: `Driver: ${r.driver} · ${r.amount} · Route: ${r.route} · Status: ${getReimbStatus(r.id, r.status)}` })}>

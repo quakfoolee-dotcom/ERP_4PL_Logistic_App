@@ -5,6 +5,13 @@ import {
 import { Package, ArrowUpRight, ArrowDownRight, Warehouse, Scale, Copy, FileText, CheckCircle2, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
+import { buildOperationsProjection } from "../domain/operationsProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
+
+const operationsProjection = buildOperationsProjection(demoErpSeed);
+const projectedHandlingFees = operationsProjection.handlingFees;
+const projectedInventory = operationsProjection.inventory;
+const projectedWeeklyActivity = operationsProjection.weeklyActivity;
 
 // Real FBA container data from 2026 dispatch sheet (CAD)
 const handlingFees = [
@@ -48,14 +55,14 @@ const statusColors: Record<string, { bg: string; color: string }> = {
 
 export function WarehouseView({ language = "zh" }: { language?: AppLanguage }) {
   void language;
-  const [rows, setRows] = useState(handlingFees);
-  const [selectedRow, setSelectedRow] = useState<typeof handlingFees[0] | null>(handlingFees[3] ?? null);
+  const [rows, setRows] = useState(projectedHandlingFees);
+  const [selectedRow, setSelectedRow] = useState<typeof projectedHandlingFees[0] | null>(projectedHandlingFees[3] ?? null);
 
-  function handleRowClick(row: typeof handlingFees[0]) {
+  function handleRowClick(row: typeof projectedHandlingFees[0]) {
     setSelectedRow(row);
   }
 
-  function updateHandlingRow(id: string, patch: Partial<typeof handlingFees[0]>) {
+  function updateHandlingRow(id: string, patch: Partial<typeof projectedHandlingFees[0]>) {
     setRows(prev => {
       const next = prev.map(row => row.id === id ? { ...row, ...patch } : row);
       setSelectedRow(next.find(row => row.id === id) ?? null);
@@ -63,22 +70,22 @@ export function WarehouseView({ language = "zh" }: { language?: AppLanguage }) {
     });
   }
 
-  function settleHandling(row: typeof handlingFees[0]) {
+  function settleHandling(row: typeof projectedHandlingFees[0]) {
     updateHandlingRow(row.id, { status: "已结算" });
     toast.success(`${row.id} settled`, { description: `${row.total} handling fee marked as settled.` });
   }
 
-  function releaseHold(row: typeof handlingFees[0]) {
+  function releaseHold(row: typeof projectedHandlingFees[0]) {
     updateHandlingRow(row.id, { dispatched: "Pending dispatch" });
     toast.success(`${row.id} released`, { description: "Dispatch status changed from HOLD to pending dispatch." });
   }
 
-  function copyContainer(row: typeof handlingFees[0]) {
+  function copyContainer(row: typeof projectedHandlingFees[0]) {
     void navigator.clipboard?.writeText(row.id);
     toast.success(`${row.id} copied`);
   }
 
-  function exportWorkOrder(row: typeof handlingFees[0]) {
+  function exportWorkOrder(row: typeof projectedHandlingFees[0]) {
     const details = [
       `Container: ${row.id}`,
       `FBA Shipment: ${row.fbaShipment}`,
@@ -184,7 +191,7 @@ export function WarehouseView({ language = "zh" }: { language?: AppLanguage }) {
               <span className="ml-2 text-xs" style={{ color: "var(--muted-foreground)" }}>Weekly FBA Inbound / Outbound (Units)</span>
             </div>
             <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={weeklyActivity} barSize={20} barGap={4}>
+              <BarChart data={projectedWeeklyActivity} barSize={20} barGap={4}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={40} />
@@ -205,7 +212,7 @@ export function WarehouseView({ language = "zh" }: { language?: AppLanguage }) {
               <div className="text-xs" style={{ color: "var(--muted-foreground)" }}>GTA Warehouse Zone Utilization</div>
             </div>
             <div className="space-y-3">
-              {inventory.map((zone, i) => {
+              {projectedInventory.map((zone, i) => {
                 const pct = Math.round((zone.used / zone.capacity) * 100);
                 const colors = ["#1C64F2", "#0D9488", "#8B5CF6", "#F59E0B", "#EF4444"];
                 return (

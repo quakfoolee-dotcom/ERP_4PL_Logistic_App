@@ -3,6 +3,11 @@ import { FileCheck, Upload, Eye, XCircle, CheckCircle, Clock, AlertOctagon, X, R
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import type { AppLanguage } from "../i18n";
+import { buildOperationsProjection } from "../domain/operationsProjection";
+import { demoErpSeed } from "../mocks/erpSeed";
+
+const operationsProjection = buildOperationsProjection(demoErpSeed);
+const projectedPods = operationsProjection.pods;
 
 type PodStatus = "confirmed" | "rejected" | "pending";
 interface Pod { file: string; customer: string; dest: string; driver: string; pallets: number; date: string; status: PodStatus; note?: string; }
@@ -36,7 +41,7 @@ const td: React.CSSProperties = { padding: "9px 10px", fontSize: 12, borderBotto
 export function PODManagement({ language = "zh" }: { language?: AppLanguage }) {
   void language;
   const { promptDialog, ActionDialog } = useActionDialog();
-  const [pods, setPods] = useState<Pod[]>(initPods);
+  const [pods, setPods] = useState<Pod[]>(projectedPods);
   const [filter, setFilter] = useState<"all" | PodStatus>("all");
   const [viewing, setViewing] = useState<Pod | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
