@@ -1,15 +1,8 @@
-import { toLegacyTransportOrder, type LegacyTransportOrder } from "../domain/legacyTransportOrder";
-import { demoErpSeed } from "../mocks/erpSeed";
+import type { LegacyTransportOrder } from "../domain/legacyTransportOrder";
+import { getInitialTransportOrders } from "../repositories/projections";
 
 export type TransportOrder = LegacyTransportOrder;
 
-// Compatibility export for the current UI. The source of truth is now the
-// normalized demo seed in src/app/mocks/erpSeed.ts.
-export const initialTransportOrders: TransportOrder[] = demoErpSeed.transportOrders.map((order) =>
-  toLegacyTransportOrder(order, {
-    organizations: demoErpSeed.organizations,
-    locations: demoErpSeed.locations,
-    drivers: demoErpSeed.drivers,
-    vehicles: demoErpSeed.vehicles,
-  }),
-);
+// Compatibility export for the current UI. The source of truth is now the ERP
+// repository snapshot, which can later be backed by an API/database.
+export const initialTransportOrders: TransportOrder[] = getInitialTransportOrders();

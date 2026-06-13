@@ -5,10 +5,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import type { AppLanguage } from "../i18n";
-import { buildOperationsProjection } from "../domain/operationsProjection";
-import { demoErpSeed } from "../mocks/erpSeed";
+import { getOperationsProjection } from "../repositories/projections";
 
-const operationsProjection = buildOperationsProjection(demoErpSeed);
+const operationsProjection = getOperationsProjection();
 const projectedPayrollDrivers = operationsProjection.payrollDrivers;
 const projectedReimbursements = operationsProjection.reimbursements;
 

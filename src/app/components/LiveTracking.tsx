@@ -3,10 +3,9 @@ import { AlertTriangle, RefreshCw, MapPin, Truck, X, ChevronRight, CheckCircle2,
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import type { AppLanguage } from "../i18n";
-import { buildOperationsProjection } from "../domain/operationsProjection";
-import { demoErpSeed } from "../mocks/erpSeed";
+import { getOperationsProjection } from "../repositories/projections";
 
-const operationsProjection = buildOperationsProjection(demoErpSeed);
+const operationsProjection = getOperationsProjection();
 const projectedContainers = operationsProjection.liveContainers;
 const projectedAppointments = operationsProjection.appointments;
 

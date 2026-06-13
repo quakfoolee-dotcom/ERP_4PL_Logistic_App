@@ -5,10 +5,9 @@ import {
 import { Package, ArrowUpRight, ArrowDownRight, Warehouse, Scale, Copy, FileText, CheckCircle2, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
-import { buildOperationsProjection } from "../domain/operationsProjection";
-import { demoErpSeed } from "../mocks/erpSeed";
+import { getOperationsProjection } from "../repositories/projections";
 
-const operationsProjection = buildOperationsProjection(demoErpSeed);
+const operationsProjection = getOperationsProjection();
 const projectedHandlingFees = operationsProjection.handlingFees;
 const projectedInventory = operationsProjection.inventory;
 const projectedWeeklyActivity = operationsProjection.weeklyActivity;

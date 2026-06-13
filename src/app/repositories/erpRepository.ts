@@ -22,6 +22,7 @@ export interface OperationalOrderGraph {
 }
 
 export interface ErpRepository {
+  getSnapshot(): ErpSeedData;
   listTransportOrders(): Promise<TransportOrder[]>;
   getOperationalOrderGraph(orderId: string): Promise<OperationalOrderGraph | null>;
   updateTransportOrderStatus(orderId: string, status: TransportOrderStatus): Promise<TransportOrder | null>;
@@ -39,6 +40,10 @@ export function createMockErpRepository(seed: ErpSeedData = demoErpSeed): ErpRep
   let state = clone(seed);
 
   return {
+    getSnapshot() {
+      return clone(state);
+    },
+
     async listTransportOrders() {
       return clone(state.transportOrders);
     },

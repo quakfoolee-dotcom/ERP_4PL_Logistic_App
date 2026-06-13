@@ -3,10 +3,9 @@ import { FileCheck, Upload, Eye, XCircle, CheckCircle, Clock, AlertOctagon, X, R
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import type { AppLanguage } from "../i18n";
-import { buildOperationsProjection } from "../domain/operationsProjection";
-import { demoErpSeed } from "../mocks/erpSeed";
+import { getOperationsProjection } from "../repositories/projections";
 
-const operationsProjection = buildOperationsProjection(demoErpSeed);
+const operationsProjection = getOperationsProjection();
 const projectedPods = operationsProjection.pods;
 
 type PodStatus = "confirmed" | "rejected" | "pending";

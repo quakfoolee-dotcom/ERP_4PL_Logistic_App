@@ -7,14 +7,14 @@ import { AlertCircle, CheckCircle2, Clock, Download, FileText, Send, X } from "l
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
-import { buildFinanceProjection, summarizeFinance, type FinanceStatusKey } from "../domain/financeProjection";
-import { demoErpSeed } from "../mocks/erpSeed";
+import type { FinanceStatusKey } from "../domain/financeProjection";
+import { getFinanceProjection, getFinanceSummary } from "../repositories/projections";
 
 type FinanceSection = "finance" | "ar" | "ap" | "transfer";
 type StatusKey = FinanceStatusKey;
 
-const financeProjection = buildFinanceProjection(demoErpSeed);
-const financeSummary = summarizeFinance(financeProjection);
+const financeProjection = getFinanceProjection();
+const financeSummary = getFinanceSummary();
 const invoices = financeProjection.invoices;
 const payables = financeProjection.payables;
 const transfers = financeProjection.transfers;
