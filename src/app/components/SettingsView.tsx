@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Building2, DollarSign, Bell, Users, Save, Edit2, Plus, Trash2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 interface RateRow { zone:string; codes:string; rate:number; editing:boolean; }
 interface UserRow { name:string; email:string; role:string; status:"active"|"inactive"; }
@@ -38,7 +39,8 @@ const th: React.CSSProperties = {background:"var(--muted)",fontSize:11,fontWeigh
 const td: React.CSSProperties = {padding:"10px 12px",fontSize:12,borderBottom:"1px solid var(--border)"};
 const label: React.CSSProperties = {fontSize:11,fontWeight:600,color:"var(--muted-foreground)",display:"block",marginBottom:6};
 
-export function SettingsView() {
+export function SettingsView({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
   const [company, setCompany] = useState({name:"枫途物流 Canada",address:"10 Whybank Dr, Brampton, ON L7A 1B6",phone:"(905) 555-0192",email:"ops@fengtu.ca",hst:"12345-6789 RT 0001",currency:"CAD"});
   const [rates, setRates]     = useState<RateRow[]>(initRates);

@@ -5,6 +5,7 @@ import {
   ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   PolarRadiusAxis, Legend
 } from "recharts";
+import type { AppLanguage } from "../i18n";
 
 // Real-based CAD revenue (in $K) — GTA FBA Logistics operation
 const trendByPeriod: Record<string, { month: string; revenue: number; orders: number }[]> = {
@@ -66,7 +67,8 @@ const tierColors: Record<string, { bg: string; color: string }> = {
   "银牌": { bg: "#F1F5F9", color: "#64748B" },
 };
 
-export function AnalyticsView() {
+export function AnalyticsView({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const [period, setPeriod] = useState("月度");
   const trendData = trendByPeriod[period];
   return (

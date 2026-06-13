@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Star, Phone, Truck, MapPin, FileText, Shield, X, Edit2, Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 type DocStatus = "valid" | "expiring" | "expired";
 interface Driver { id: string; name: string; phone: string; vehicle: string; routes: string; ytdOrders: number; ytdEarnings: number; rating: number; status: "on-route"|"active"|"off"; statusLabel: string; color: string; }
@@ -51,7 +52,8 @@ function Stars({ r }: { r: number }) {
   );
 }
 
-export function DriverProfiles() {
+export function DriverProfiles({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, ActionDialog } = useActionDialog();
   const [drivers, setDrivers]       = useState<Driver[]>(initDrivers);
   const [docs, setDocs]             = useState<Doc[]>(initDocs);

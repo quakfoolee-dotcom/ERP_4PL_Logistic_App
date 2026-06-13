@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { Search, AlertTriangle, Clock, CheckCircle2, Package, Box, Archive, TrendingUp, X, Truck } from "lucide-react";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 // Real FBA inventory currently stored at Brampton #25 / #10 warehouses
 // Sourced from 2026 container dispatch sheet — containers with partial or full HOLD status
@@ -92,7 +93,8 @@ const totalCBM   = inventoryItems.reduce((s, i) => s + i.cbm, 0);
 const holdCount  = inventoryItems.filter(i => i.status.startsWith("HOLD")).length;
 const pendingCount = inventoryItems.filter(i => i.status === "待派送" || i.status === "待指令").length;
 
-export function InventoryView() {
+export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, ActionDialog } = useActionDialog();
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState("全部");

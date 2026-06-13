@@ -11,6 +11,7 @@ interface Order {
   driver: string;
   vehicle?: string;
   type?: string;
+  pallets?: string;
   weight?: string;
   status: string;
   amount: string;

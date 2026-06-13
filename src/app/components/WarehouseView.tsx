@@ -4,6 +4,7 @@ import {
 } from "recharts";
 import { Package, ArrowUpRight, ArrowDownRight, Warehouse, Scale, Copy, FileText, CheckCircle2, Unlock } from "lucide-react";
 import { toast } from "sonner";
+import type { AppLanguage } from "../i18n";
 
 // Real FBA container data from 2026 dispatch sheet (CAD)
 const handlingFees = [
@@ -45,7 +46,8 @@ const statusColors: Record<string, { bg: string; color: string }> = {
   "待结算": { bg: "#FEF3C7", color: "#D97706" },
 };
 
-export function WarehouseView() {
+export function WarehouseView({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const [rows, setRows] = useState(handlingFees);
   const [selectedRow, setSelectedRow] = useState<typeof handlingFees[0] | null>(handlingFees[3] ?? null);
 

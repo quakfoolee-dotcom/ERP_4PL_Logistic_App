@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Shield, CheckCircle2, AlertTriangle, XCircle, FileText, User, Clock, Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 type DocStatus = "valid"|"expiring"|"expired";
 interface DocRow { driver:string; type:string; expiry:string; status:DocStatus; }
@@ -54,7 +55,8 @@ const card: React.CSSProperties = {background:"var(--card)",borderRadius:12,bord
 const th: React.CSSProperties = {background:"var(--muted)",fontSize:11,fontWeight:600,padding:"8px 10px",textAlign:"left",color:"var(--muted-foreground)"};
 const td: React.CSSProperties = {padding:"9px 10px",fontSize:12,borderBottom:"1px solid var(--border)"};
 
-export function ComplianceView() {
+export function ComplianceView({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, ActionDialog } = useActionDialog();
   const [docs, setDocs]     = useState<DocRow[]>(initDocs);
   const [checks, setChecks] = useState<CheckItem[]>(initChecks);

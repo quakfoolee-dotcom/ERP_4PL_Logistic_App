@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, RefreshCw, MapPin, Truck, X, ChevronRight, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 const initContainers = [
   { id: "ZCSU6522960", pallets: 49, dest: "YYZ9", driver: "LH+AF+JH", departed: "2026-04-05", eta: "2026-04-08", status: "delivered", notes: "3 trips dispatched: 26P LH, 23P AF, 4P JH. All confirmed at YYZ9." },
@@ -31,7 +32,8 @@ const card: React.CSSProperties = { background: "var(--card)", borderRadius: 12,
 const th: React.CSSProperties = { background: "var(--muted)", fontSize: 11, fontWeight: 600, padding: "8px 12px", textAlign: "left", color: "var(--muted-foreground)" };
 const td: React.CSSProperties = { padding: "10px 12px", fontSize: 12, borderBottom: "1px solid var(--border)" };
 
-export function LiveTracking() {
+export function LiveTracking({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, ActionDialog } = useActionDialog();
   const [containers, setContainers] = useState(initContainers);
   const [appts, setAppts]           = useState(initAppts);

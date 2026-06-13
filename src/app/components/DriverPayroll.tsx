@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
+import type { AppLanguage } from "../i18n";
 
 // Real drivers from Nov 2025 transport log — CAD
 const drivers = [
@@ -39,7 +40,8 @@ const statusStyle: Record<string, { bg: string; color: string }> = {
   "已拒绝": { bg: "#FEE2E2", color: "#DC2626" },
 };
 
-export function DriverPayroll() {
+export function DriverPayroll({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const [reimbursementStatus, setReimbursementStatus] = useState<Record<string, string>>({});
   const [driverStatuses, setDriverStatuses] = useState<Record<string, string>>({});
 

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { TransportOrder } from "../data/transportOrders";
 import { useActionDialog } from "./ActionDialog";
 import { orderStatusLabel, pick, podLabel, type AppLanguage } from "../i18n";
+import { escapeHtml } from "../utils/html";
 
 const statusStyle: Record<string, { bg: string; color: string }> = {
   "已完成": { bg: "#D1FAE5", color: "#059669" },
@@ -113,6 +114,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
       toast.error("Popup blocked", { description: "Allow popups to print the bill of lading." });
       return;
     }
+    doc.opener = null;
     doc.document.write(`
       <html><head><title>${order.id} BOL</title><style>
         body{font-family:Arial,sans-serif;padding:32px;color:#0f172a}
@@ -121,13 +123,13 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
       </style></head><body>
         <h1>Bill of Lading</h1>
         <table>
-          <tr><td>Order ID</td><td>${order.id}</td></tr>
-          <tr><td>Customer</td><td>${order.customer}</td></tr>
-          <tr><td>Route</td><td>${order.origin} → ${order.dest}</td></tr>
-          <tr><td>Driver</td><td>${order.driver}</td></tr>
-          <tr><td>Type / Pallets</td><td>${order.type} / ${order.pallets}</td></tr>
-          <tr><td>ETA</td><td>${order.eta}</td></tr>
-          <tr><td>Revenue</td><td>${order.amount}</td></tr>
+          <tr><td>Order ID</td><td>${escapeHtml(order.id)}</td></tr>
+          <tr><td>Customer</td><td>${escapeHtml(order.customer)}</td></tr>
+          <tr><td>Route</td><td>${escapeHtml(order.origin)} → ${escapeHtml(order.dest)}</td></tr>
+          <tr><td>Driver</td><td>${escapeHtml(order.driver)}</td></tr>
+          <tr><td>Type / Pallets</td><td>${escapeHtml(order.type)} / ${escapeHtml(order.pallets)}</td></tr>
+          <tr><td>ETA</td><td>${escapeHtml(order.eta)}</td></tr>
+          <tr><td>Revenue</td><td>${escapeHtml(order.amount)}</td></tr>
         </table>
         <script>window.print()</script>
       </body></html>

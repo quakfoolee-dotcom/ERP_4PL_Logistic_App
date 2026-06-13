@@ -1,23 +1,24 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
-import { Dashboard } from "./components/Dashboard";
-import { TransportOrders } from "./components/TransportOrders";
-import { FinanceView } from "./components/FinanceView";
-import { DriverPayroll } from "./components/DriverPayroll";
-import { WarehouseView } from "./components/WarehouseView";
-import { AnalyticsView } from "./components/AnalyticsView";
-import { InventoryView } from "./components/InventoryView";
 import { NewOrderModal } from "./components/NewOrderModal";
-import { LiveTracking } from "./components/LiveTracking";
-import { PODManagement } from "./components/PODManagement";
-import { DriverProfiles } from "./components/DriverProfiles";
-import { PartnerQuotes } from "./components/PartnerQuotes";
-import { ReconciliationView } from "./components/ReconciliationView";
-import { ComplianceView } from "./components/ComplianceView";
-import { SettingsView } from "./components/SettingsView";
 import { initialTransportOrders, type TransportOrder } from "./data/transportOrders";
 import { installLanguageDomSanitizer, type AppLanguage } from "./i18n";
+
+const Dashboard = lazy(() => import("./components/Dashboard").then((module) => ({ default: module.Dashboard })));
+const TransportOrders = lazy(() => import("./components/TransportOrders").then((module) => ({ default: module.TransportOrders })));
+const FinanceView = lazy(() => import("./components/FinanceView").then((module) => ({ default: module.FinanceView })));
+const DriverPayroll = lazy(() => import("./components/DriverPayroll").then((module) => ({ default: module.DriverPayroll })));
+const WarehouseView = lazy(() => import("./components/WarehouseView").then((module) => ({ default: module.WarehouseView })));
+const AnalyticsView = lazy(() => import("./components/AnalyticsView").then((module) => ({ default: module.AnalyticsView })));
+const InventoryView = lazy(() => import("./components/InventoryView").then((module) => ({ default: module.InventoryView })));
+const LiveTracking = lazy(() => import("./components/LiveTracking").then((module) => ({ default: module.LiveTracking })));
+const PODManagement = lazy(() => import("./components/PODManagement").then((module) => ({ default: module.PODManagement })));
+const DriverProfiles = lazy(() => import("./components/DriverProfiles").then((module) => ({ default: module.DriverProfiles })));
+const PartnerQuotes = lazy(() => import("./components/PartnerQuotes").then((module) => ({ default: module.PartnerQuotes })));
+const ReconciliationView = lazy(() => import("./components/ReconciliationView").then((module) => ({ default: module.ReconciliationView })));
+const ComplianceView = lazy(() => import("./components/ComplianceView").then((module) => ({ default: module.ComplianceView })));
+const SettingsView = lazy(() => import("./components/SettingsView").then((module) => ({ default: module.SettingsView })));
 
 const pageConfig: Record<string, { title: string; titleEn: string; addLabel?: string; addLabelEn?: string }> = {
   dashboard: { title: "运营控制台", titleEn: "Operations Dashboard" },
@@ -48,6 +49,16 @@ function PlaceholderView({ title, language }: { title: string; language: AppLang
         <div style={{ fontSize: 48, marginBottom: 12 }}>🚧</div>
         <div className="text-lg" style={{ fontWeight: 600, color: "var(--foreground)" }}>{title}</div>
         <div className="text-sm mt-1" style={{ color: "var(--muted-foreground)" }}>{language === "en" ? "Coming Soon" : "即将推出"}</div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingView({ language }: { language: AppLanguage }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="rounded-xl border bg-card px-4 py-3 text-sm" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>
+        {language === "en" ? "Loading..." : "加载中..."}
       </div>
     </div>
   );
@@ -125,18 +136,18 @@ export default function App() {
       case "ap":
       case "transfer": return <FinanceView section={activePage as "finance" | "ar" | "ap" | "transfer"} language={language} />;
       case "payroll":
-      case "reimbursements": return <DriverPayroll />;
+      case "reimbursements": return <DriverPayroll language={language} />;
       case "warehouse":
-      case "handling": return <WarehouseView />;
-      case "inventory": return <InventoryView />;
-      case "analytics": return <AnalyticsView />;
-      case "tracking": return <LiveTracking />;
-      case "pod": return <PODManagement />;
-      case "profiles": return <DriverProfiles />;
+      case "handling": return <WarehouseView language={language} />;
+      case "inventory": return <InventoryView language={language} />;
+      case "analytics": return <AnalyticsView language={language} />;
+      case "tracking": return <LiveTracking language={language} />;
+      case "pod": return <PODManagement language={language} />;
+      case "profiles": return <DriverProfiles language={language} />;
       case "quotes": return <PartnerQuotes language={language} />;
       case "reconcile": return <ReconciliationView language={language} />;
-      case "compliance": return <ComplianceView />;
-      case "settings": return <SettingsView />;
+      case "compliance": return <ComplianceView language={language} />;
+      case "settings": return <SettingsView language={language} />;
       default: return <PlaceholderView title={language === "en" ? page.titleEn : page.title} language={language} />;
     }
   }
@@ -162,7 +173,9 @@ export default function App() {
           }}
         />
         <div className="flex-1 overflow-hidden flex flex-col" style={{ background: "var(--background)" }}>
-          {renderContent()}
+          <Suspense fallback={<LoadingView language={language} />}>
+            {renderContent()}
+          </Suspense>
         </div>
       </div>
 

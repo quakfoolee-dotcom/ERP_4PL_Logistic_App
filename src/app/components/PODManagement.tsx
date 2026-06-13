@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { FileCheck, Upload, Eye, XCircle, CheckCircle, Clock, AlertOctagon, X, RotateCcw, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
+import type { AppLanguage } from "../i18n";
 
 type PodStatus = "confirmed" | "rejected" | "pending";
 interface Pod { file: string; customer: string; dest: string; driver: string; pallets: number; date: string; status: PodStatus; note?: string; }
@@ -32,7 +33,8 @@ const card: React.CSSProperties = { background: "var(--card)", borderRadius: 12,
 const th: React.CSSProperties = { background: "var(--muted)", fontSize: 11, fontWeight: 600, padding: "6px 10px", textAlign: "left", color: "var(--muted-foreground)" };
 const td: React.CSSProperties = { padding: "9px 10px", fontSize: 12, borderBottom: "1px solid var(--border)" };
 
-export function PODManagement() {
+export function PODManagement({ language = "zh" }: { language?: AppLanguage }) {
+  void language;
   const { promptDialog, ActionDialog } = useActionDialog();
   const [pods, setPods] = useState<Pod[]>(initPods);
   const [filter, setFilter] = useState<"all" | PodStatus>("all");
