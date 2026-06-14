@@ -430,6 +430,8 @@ export function buildWorkflowSeedFromOrderToCash(snapshot = orderToCashRepositor
         amountCad: invoice ? totalCad(invoice) : 0,
         status: status.syncStatus === "synced" ? "synced" : status.syncStatus === "failed" ? "failed" : status.syncStatus === "queued" ? "ready_to_sync" : "queued",
         lastAttempt: status.lastSyncTime ?? "Not run",
+        externalReference: status.externalSystemId,
+        errorMessage: status.syncErrorMessage,
       };
     });
 

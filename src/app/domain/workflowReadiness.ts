@@ -90,6 +90,8 @@ export interface AccountingSyncRecord {
   amountCad: number;
   status: AccountingSyncStatus;
   lastAttempt: string;
+  externalReference?: string;
+  errorMessage?: string;
 }
 
 export const asnReceivingRecords: AsnReceivingRecord[] = [

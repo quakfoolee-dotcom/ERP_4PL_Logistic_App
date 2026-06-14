@@ -47,7 +47,8 @@ The main customer-to-cash flow is now partially connected end to end:
 9. POD Management reads POD-pending dispatches and confirms POD against the same dispatch record.
 10. Finance Hub receives handling and transport billing queue items, including blocked POD items and ready-to-invoice items.
 11. Finance Hub can issue a billing queue item into an AR invoice and QuickBooks sync staging row.
-12. AR Invoices can mark payment received, which updates payment and reconciliation state.
+12. Finance Hub can mark accounting sync rows as failed, retried/ready, synced, and can store an external QuickBooks reference.
+13. AR Invoices can mark payment received, show the invoice's accounting sync status/reference, and update payment/reconciliation state.
 
 Latest verified handoff:
 
@@ -58,6 +59,7 @@ Live Tracking Move to POD -> POD Management Pending
 POD Confirm -> Finance Hub billing queue Ready
 Finance queue item: BQ-INV-ASN-2026-07-04-RW0D
 Finance Invoice -> AR invoice INV-ASN-2026-07-04-RW0D
+Accounting Sync -> Fail / Retry / QB Ref / Synced
 AR Paid -> Reconciliation Matched
 ```
 
@@ -104,10 +106,10 @@ docs/HANDOFF.md
 
 ## Recommended Next Work
 
-Next process gap: deepen accounting sync and bank reconciliation after invoice/payment.
+Next process gap: deepen bank reconciliation and cash reporting after accounting sync.
 
 Target flow:
 
 ```text
-Accounting Sync Ready -> Sync Failed/Retried/Synced -> Bank Deposit Match -> Dashboard Cash KPIs
+Accounting Sync Synced -> Bank Deposit Match -> Partial Payment / Write-off / Dispute -> Dashboard Cash KPIs
 ```

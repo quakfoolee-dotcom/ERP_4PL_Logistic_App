@@ -727,12 +727,34 @@ export const workflowRepository = {
   updateAccountingSyncStatus(id: string, status: AccountingSyncStatus): WorkflowResult {
     const item = state.accountingSync.find((sync) => sync.id === id);
     if (!item) return { ok: false, message: "Sync row not found." };
+    const patch: Partial<AccountingSyncRecord> = {
+      status,
+      lastAttempt: status === "queued" ? item.lastAttempt : nowStamp(),
+      errorMessage: status === "failed" ? "Sync failed; retry or enter a manual reference." : undefined,
+    };
     publish(audit({
       ...state,
-      accountingSync: mapById(state.accountingSync, id, { status, lastAttempt: status === "synced" ? nowStamp() : item.lastAttempt }),
+      accountingSync: mapById(state.accountingSync, id, patch),
     }, "finance", id, "update_sync_status", `Accounting sync status changed to ${status}.`));
     orderToCashRepository.syncAccountingSyncStatus(id, status === "ready_to_sync" ? "queued" : status, `Accounting sync status changed to ${status}.`);
     return { ok: true, message: status === "synced" ? "Accounting sync marked complete." : "Accounting sync status updated." };
+  },
+
+  updateAccountingSyncReference(id: string, reference: string): WorkflowResult {
+    const item = state.accountingSync.find((sync) => sync.id === id);
+    if (!item) return { ok: false, message: "Sync row not found." };
+    const cleanReference = reference.trim();
+    if (!cleanReference) return { ok: false, message: "Enter a QuickBooks reference." };
+    publish(audit({
+      ...state,
+      accountingSync: mapById(state.accountingSync, id, {
+        externalReference: cleanReference,
+        errorMessage: undefined,
+        lastAttempt: nowStamp(),
+      }),
+    }, "finance", id, "update_sync_reference", `External accounting reference set to ${cleanReference}.`));
+    orderToCashRepository.updateAccountingReference(id, cleanReference);
+    return { ok: true, message: "Accounting reference saved." };
   },
 };
 

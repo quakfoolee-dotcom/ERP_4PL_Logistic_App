@@ -95,6 +95,7 @@ export interface OrderToCashRepository {
   syncDispatchStatus(dispatchId: string, status: WorkflowStatus, note: string): void;
   syncBillingStatus(queueId: string, status: WorkflowStatus, note: string): void;
   syncAccountingSyncStatus(syncId: string, status: IntegrationStatus["syncStatus"], note: string): void;
+  updateAccountingReference(syncId: string, reference: string): void;
   issueInvoiceFromBillingQueue(input: BillingInvoiceInput): Invoice;
   updateInvoiceFinanceStatus(invoiceId: string, status: InvoiceFinanceStatus, note?: string): Invoice | null;
   markInvoicePaymentReceived(invoiceId: string, method?: PaymentMethod): Invoice | null;
@@ -337,6 +338,20 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
   function invoiceForQueue(queueId: string) {
     const normalized = queueId.replace(/^BQ-/, "");
     return state.invoices.find((invoice) => normalized === invoice.invoiceId || queueId.includes(invoice.invoiceId) || invoice.relatedOrderIds.includes(normalized));
+  }
+
+  function integrationStatusForAccountingSync(syncId: string) {
+    const normalized = syncId.replace(/^SYNC-/, "").toLowerCase();
+    const syncIdLower = syncId.toLowerCase();
+    return state.integrationStatuses.find((item) => {
+      const integrationId = item.id.replace(/^sync-/, "").toLowerCase();
+      if (integrationId === normalized || syncIdLower.includes(item.ownerId.toLowerCase())) return true;
+      if (item.ownerType !== "invoice") return false;
+      const invoice = state.invoices.find((candidate) => candidate.id === item.ownerId);
+      if (!invoice) return false;
+      const publicInvoiceId = invoice.invoiceId.toLowerCase();
+      return publicInvoiceId === normalized || syncIdLower.includes(publicInvoiceId);
+    });
   }
 
   function invoiceByPublicId(invoiceId: string) {
@@ -1469,8 +1484,7 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
     },
 
     syncAccountingSyncStatus(syncId, status, note) {
-      const normalized = syncId.replace(/^SYNC-/, "").toLowerCase();
-      const syncRecord = state.integrationStatuses.find((item) => item.id.replace(/^sync-/, "").toLowerCase() === normalized || syncId.includes(item.ownerId));
+      const syncRecord = integrationStatusForAccountingSync(syncId);
       if (!syncRecord) return;
       appendTimeline(syncRecord.ownerType, syncRecord.ownerId, {
         stage: "Integration",
@@ -1488,6 +1502,33 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
           syncErrorMessage: status === "failed" ? note : undefined,
           manualUpdateFlag: status === "failed" || status === "manual",
         } : item),
+      });
+    },
+
+    updateAccountingReference(syncId, reference) {
+      const cleanReference = reference.trim();
+      if (!cleanReference) return;
+      const syncRecord = integrationStatusForAccountingSync(syncId);
+      if (!syncRecord) return;
+      const invoice = syncRecord.ownerType === "invoice" ? state.invoices.find((item) => item.id === syncRecord.ownerId) : undefined;
+      appendTimeline(syncRecord.ownerType, syncRecord.ownerId, {
+        stage: "Integration",
+        status: "in_progress",
+        title: `${syncRecord.system} reference updated`,
+        note: `External reference set to ${cleanReference}.`,
+        actor: "Finance",
+      });
+      publish({
+        ...state,
+        integrationStatuses: state.integrationStatuses.map((item) => item.id === syncRecord.id ? {
+          ...item,
+          externalSystemId: cleanReference,
+          syncErrorMessage: undefined,
+          manualUpdateFlag: false,
+        } : item),
+        invoices: invoice
+          ? state.invoices.map((item) => item.id === invoice.id ? { ...item, quickBooksReferenceNumber: cleanReference, updatedDate: today() } : item)
+          : state.invoices,
       });
     },
   };

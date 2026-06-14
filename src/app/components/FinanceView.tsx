@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
 import type { FinanceStatusKey } from "../domain/financeProjection";
+import type { IntegrationStatus } from "../domain/orderToCashModels";
 import { getFinanceProjection, getFinanceSummary } from "../repositories/projections";
 import { orderToCashRepository } from "../repositories/orderToCashRepository";
 import { useOrderToCashSnapshot } from "./BackboneTracePanel";
@@ -57,6 +58,12 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
 
   function invoiceStatus(invoice: InvoiceRow) {
     return invoiceStatuses[invoice.id] ?? invoice.status;
+  }
+
+  function invoiceSyncRows(invoice: InvoiceRow) {
+    const backboneInvoice = orderToCashSnapshot.invoices.find((item) => item.invoiceId === invoice.id || item.id === invoice.id);
+    if (!backboneInvoice) return [];
+    return orderToCashSnapshot.integrationStatuses.filter((item) => item.ownerType === "invoice" && item.ownerId === backboneInvoice.id);
   }
 
   function payableStatus(payable: PayableRow) {
@@ -169,6 +176,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
         <InvoiceDetailModal
           invoice={selectedInvoice}
           status={invoiceStatus(selectedInvoice)}
+          syncRows={invoiceSyncRows(selectedInvoice)}
           language={language}
           onClose={() => setSelectedInvoice(null)}
           onIssue={() => {
@@ -673,7 +681,21 @@ function TransferDetailModal({ transfer, language, onClose, onSettle }: { transf
   );
 }
 
-function InvoiceDetailModal({ invoice, status, language, onClose, onIssue }: { invoice: InvoiceRow; status: StatusKey; language: AppLanguage; onClose: () => void; onIssue: () => void }) {
+function InvoiceDetailModal({
+  invoice,
+  status,
+  syncRows,
+  language,
+  onClose,
+  onIssue,
+}: {
+  invoice: InvoiceRow;
+  status: StatusKey;
+  syncRows: IntegrationStatus[];
+  language: AppLanguage;
+  onClose: () => void;
+  onIssue: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border bg-card shadow-2xl" style={{ borderColor: "var(--border)" }} onClick={(event) => event.stopPropagation()}>
@@ -703,6 +725,25 @@ function InvoiceDetailModal({ invoice, status, language, onClose, onIssue }: { i
             <span style={{ color: "var(--muted-foreground)" }}>{pick(language, "状态", "Status")}</span>
             <StatusPill status={status} language={language} />
           </div>
+          {syncRows.length > 0 && (
+            <div className="rounded-lg border p-3 text-xs" style={{ borderColor: "var(--border)", background: "var(--muted)" }}>
+              <div className="mb-2" style={{ fontWeight: 800 }}>{pick(language, "会计同步", "Accounting Sync")}</div>
+              <div className="space-y-2">
+                {syncRows.map((row) => (
+                  <div key={row.id} className="flex items-start justify-between gap-3">
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{row.system}</div>
+                      <div style={{ color: row.syncErrorMessage ? "#B91C1C" : "var(--muted-foreground)" }}>{row.syncErrorMessage ?? row.externalSystemId ?? pick(language, "无参考号", "No reference")}</div>
+                    </div>
+                    <div style={{ color: "var(--muted-foreground)", textAlign: "right" }}>
+                      <div style={{ fontWeight: 800 }}>{row.syncStatus}</div>
+                      {row.lastSyncTime && <div style={{ fontFamily: "monospace" }}>{row.lastSyncTime}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <button onClick={onClose} className="rounded-lg border px-4 py-2 text-xs hover:bg-muted" style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}>{pick(language, "关闭", "Close")}</button>

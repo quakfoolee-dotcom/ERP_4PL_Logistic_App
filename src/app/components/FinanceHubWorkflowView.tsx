@@ -6,6 +6,7 @@ import { pick } from "../i18n";
 import type { AccountingSyncStatus, BillingQueueStatus } from "../domain/workflowReadiness";
 import { getBillingBackboneTrace } from "../repositories/orderToCashAdapters";
 import { useWorkflowSnapshot, workflowRepository } from "../repositories/workflowRepository";
+import { useActionDialog } from "./ActionDialog";
 import { BackboneTracePanel, useOrderToCashSnapshot } from "./BackboneTracePanel";
 
 const labels = {
@@ -23,6 +24,7 @@ const labels = {
 export function FinanceHubWorkflowView({ language = "zh" }: { language?: AppLanguage }) {
   const workflow = useWorkflowSnapshot();
   const orderToCashSnapshot = useOrderToCashSnapshot();
+  const { promptDialog, ActionDialog } = useActionDialog();
   const billingQueue = workflow.billingQueue;
   const syncRows = workflow.accountingSync;
   const auditTrail = workflow.auditTrail.slice(0, 8);
@@ -46,6 +48,15 @@ export function FinanceHubWorkflowView({ language = "zh" }: { language?: AppLang
     notify(workflowRepository.updateAccountingSyncStatus(id, status));
   }
 
+  async function setSyncReference(id: string, currentReference?: string) {
+    const reference = await promptDialog(pick(language, "QuickBooks\u53c2\u8003\u53f7", "QuickBooks Reference"), {
+      message: pick(language, "\u8f93\u5165\u5916\u90e8\u4f1a\u8ba1\u7cfb\u7edf\u53c2\u8003\u53f7\u3002", "Enter the external accounting reference."),
+      defaultValue: currentReference ?? "",
+    });
+    if (reference === null) return;
+    notify(workflowRepository.updateAccountingSyncReference(id, reference));
+  }
+
   function approveAllReady() {
     workflowRepository.approveBillingQueueItems();
     toast.success(pick(language, "所有待审批项目已批准", "All approval-needed items approved"));
@@ -53,6 +64,7 @@ export function FinanceHubWorkflowView({ language = "zh" }: { language?: AppLang
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <ActionDialog />
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
         <Kpi icon={<Banknote size={17} />} label={pick(language, "队列金额", "Queue Amount")} value={`CAD $${stats.queueCad.toLocaleString()}`} color="#1C64F2" />
         <Kpi icon={<CheckCircle2 size={17} />} label={pick(language, "需审批", "Needs Approval")} value={String(stats.approval)} color="#B45309" />
@@ -95,17 +107,28 @@ export function FinanceHubWorkflowView({ language = "zh" }: { language?: AppLang
       <div className="grid gap-5" style={{ gridTemplateColumns: "minmax(620px, 1.4fr) minmax(360px, 0.8fr)" }}>
         <Panel title={pick(language, "会计同步暂存区", "Accounting Sync Staging")} subtitle={pick(language, "QuickBooks、银行、工资和BI同步状态暂存", "Staging for QuickBooks, bank, payroll, and BI sync statuses")}>
           <div style={{ overflowX: "auto" }}>
-            <table className="w-full" style={{ minWidth: 860 }}>
-              <thead><tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>{[pick(language, "同步号", "Sync #"), pick(language, "系统", "System"), pick(language, "对象", "Object"), pick(language, "金额", "Amount"), pick(language, "上次尝试", "Last Attempt"), pick(language, "状态", "Status"), pick(language, "操作", "Action")].map((header, index) => <th key={header} className="px-3 py-2.5 text-left text-xs" style={{ ...stickyStyle(index === 6), color: "var(--muted-foreground)", fontWeight: 700 }}>{header}</th>)}</tr></thead>
+            <table className="w-full" style={{ minWidth: 1080 }}>
+              <thead><tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>{[pick(language, "\u540c\u6b65\u53f7", "Sync #"), pick(language, "\u7cfb\u7edf", "System"), pick(language, "\u5bf9\u8c61", "Object"), pick(language, "\u91d1\u989d", "Amount"), pick(language, "\u53c2\u8003\u53f7", "Reference"), pick(language, "\u4e0a\u6b21\u5c1d\u8bd5", "Last Attempt"), pick(language, "\u72b6\u6001", "Status"), pick(language, "\u95ee\u9898", "Issue"), pick(language, "\u64cd\u4f5c", "Action")].map((header, index) => <th key={header} className="px-3 py-2.5 text-left text-xs" style={{ ...stickyStyle(index === 8), color: "var(--muted-foreground)", fontWeight: 700 }}>{header}</th>)}</tr></thead>
               <tbody>{syncRows.map((item) => (
                 <tr key={item.id} className="border-b hover:bg-muted/30" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
                   <td className="px-3 py-3 text-xs" style={{ fontFamily: "monospace", color: "var(--primary)", fontWeight: 800 }}>{item.id}</td>
                   <td className="px-3 py-3 text-xs" style={{ fontWeight: 700 }}>{item.system}</td>
                   <td className="px-3 py-3 text-xs">{item.objectType} / <span style={{ fontFamily: "monospace" }}>{item.objectId}</span></td>
                   <td className="px-3 py-3 text-xs" style={{ fontFamily: "monospace" }}>{item.amountCad ? `CAD $${item.amountCad.toLocaleString()}` : "-"}</td>
+                  <td className="px-3 py-3 text-xs" style={{ fontFamily: "monospace", color: item.externalReference ? "var(--foreground)" : "var(--muted-foreground)" }}>{item.externalReference ?? "-"}</td>
                   <td className="px-3 py-3 text-xs" style={{ color: "var(--muted-foreground)" }}>{item.lastAttempt}</td>
                   <td className="px-3 py-3 text-xs"><StatusPill value={item.status} language={language} /></td>
-                  <td className="px-3 py-3 text-xs" style={stickyStyle(true)}><button onClick={() => updateSync(item.id, "synced")} className="rounded-lg px-3 py-1.5 text-xs" style={{ background: "var(--primary)", color: "white", fontWeight: 800 }}>{pick(language, "标记同步", "Mark Synced")}</button></td>
+                  <td className="px-3 py-3 text-xs" style={{ color: item.errorMessage ? "#B91C1C" : "var(--muted-foreground)", maxWidth: 220 }}>{item.errorMessage ?? "-"}</td>
+                  <td className="px-3 py-3 text-xs" style={stickyStyle(true)}>
+                    <SyncActions
+                      status={item.status}
+                      language={language}
+                      onSynced={() => updateSync(item.id, "synced")}
+                      onFailed={() => updateSync(item.id, "failed")}
+                      onRetry={() => updateSync(item.id, "ready_to_sync")}
+                      onReference={() => setSyncReference(item.id, item.externalReference)}
+                    />
+                  </td>
                 </tr>
               ))}</tbody>
             </table>
@@ -128,6 +151,31 @@ export function FinanceHubWorkflowView({ language = "zh" }: { language?: AppLang
           </div>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function SyncActions({
+  status,
+  onSynced,
+  onFailed,
+  onRetry,
+  onReference,
+  language,
+}: {
+  status: AccountingSyncStatus;
+  onSynced: () => void;
+  onFailed: () => void;
+  onRetry: () => void;
+  onReference: () => void;
+  language: AppLanguage;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {status !== "synced" && <Action label={pick(language, "\u6807\u8bb0\u540c\u6b65", "Mark Synced")} onClick={onSynced} />}
+      {status !== "failed" && <Action muted label={pick(language, "\u6807\u8bb0\u5931\u8d25", "Fail")} onClick={onFailed} />}
+      {status === "failed" && <Action label={pick(language, "\u91cd\u8bd5", "Retry")} onClick={onRetry} />}
+      <Action muted label={pick(language, "\u53c2\u8003\u53f7", "QB Ref")} onClick={onReference} />
     </div>
   );
 }
