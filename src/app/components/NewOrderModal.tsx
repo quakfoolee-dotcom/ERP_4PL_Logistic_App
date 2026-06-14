@@ -21,6 +21,31 @@ const locations = [
   "Saint-Laurent, QC",
 ];
 
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function todayDate() {
+  return toDateInputValue(new Date());
+}
+
+function defaultEtaDate() {
+  return toDateInputValue(addDays(new Date(), 18));
+}
+
+function orderDateCode(date: string) {
+  return date.replace(/-/g, "").slice(2);
+}
+
 export function NewOrderModal({ onClose, onSubmit }: NewOrderModalProps) {
   const [form, setForm] = useState({
     customer: "",
@@ -31,7 +56,7 @@ export function NewOrderModal({ onClose, onSubmit }: NewOrderModalProps) {
     pallets: "",
     amount: "",
     cost: "",
-    eta: "2026-04-30",
+    eta: defaultEtaDate(),
     note: "",
   });
   const [step, setStep] = useState(1);
@@ -59,7 +84,7 @@ export function NewOrderModal({ onClose, onSubmit }: NewOrderModalProps) {
     const suffix = `${form.customer.replace(/[^A-Z0-9]/gi, "").slice(0, 5).toUpperCase()}${Date.now().toString().slice(-4)}`;
     const profit = amountNumber - costNumber;
     onSubmit({
-      id: `WB-260430-${suffix}`,
+      id: `WB-${orderDateCode(form.eta)}-${suffix}`,
       customer: form.customer,
       origin: form.origin,
       dest: `${form.dest} (${palletsNumber}P)`,
@@ -73,7 +98,7 @@ export function NewOrderModal({ onClose, onSubmit }: NewOrderModalProps) {
       profit: `CAD $${profit.toLocaleString("en-CA")}`,
       pod: "待确认",
       eta: form.eta,
-      created: "2026-04-30",
+      created: todayDate(),
     });
   }
 
@@ -140,7 +165,7 @@ export function NewOrderModal({ onClose, onSubmit }: NewOrderModalProps) {
                 </Field>
               </div>
               <Field label="ETA" required>
-                <Input value={form.eta} onChange={(value) => set("eta", value)} placeholder="2026-04-30" type="date" />
+                <Input value={form.eta} onChange={(value) => set("eta", value)} placeholder={defaultEtaDate()} type="date" />
               </Field>
               <Field label="备注 Notes">
                 <textarea value={form.note} onChange={(event) => set("note", event.target.value)} placeholder="Special handling notes..." rows={3} className="w-full resize-none rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />

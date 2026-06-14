@@ -96,10 +96,18 @@ function formatCAD(value: number) {
   return `CAD $${value.toLocaleString("en-CA")}`;
 }
 
+function orderEtaMonthRange(orders: TransportOrder[]) {
+  const months = Array.from(new Set(orders.map((order) => order.eta.slice(0, 7)).filter(Boolean))).sort();
+  if (months.length === 0) return "No ETA";
+  if (months.length === 1) return months[0];
+  return `${months[0]} to ${months[months.length - 1]}`;
+}
+
 export function Dashboard({ orders, onNavigate, onUpdateOrder, language }: DashboardProps) {
   const [selectedOrder, setSelectedOrder] = useState<TransportOrder | null>(null);
   const [editingOrder, setEditingOrder] = useState<TransportOrder | null>(null);
   const recentTransportOrders = orders.slice(0, 7);
+  const etaRange = orderEtaMonthRange(orders);
 
   function saveOrder(order: TransportOrder) {
     const revenue = moneyValue(order.amount);
@@ -131,7 +139,7 @@ export function Dashboard({ orders, onNavigate, onUpdateOrder, language }: Dashb
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
         <KpiCard label={pick(language, "月营收", "Monthly Revenue")} value="CAD $58.8K" sub={pick(language, "2026年3月", "Mar 2026")} trend={8.4} trendLabel={pick(language, "较上月", "vs last month")} accent="#1C64F2"
           icon={<DollarSign size={16} />} />
-        <KpiCard label={pick(language, "运输订单", "Transport Orders")} value={String(orders.length)} sub={pick(language, "2026年4月 + 2025年11月", "Apr 2026 + Nov 2025")} trend={12.1} trendLabel={pick(language, "较上月", "vs last month")} accent="#0D9488"
+        <KpiCard label={pick(language, "运输订单", "Transport Orders")} value={String(orders.length)} sub={`ETA ${etaRange}`} trend={12.1} trendLabel={pick(language, "较上月", "vs last month")} accent="#0D9488"
           icon={<Truck size={16} />} />
         <KpiCard label={pick(language, "完成率", "Completion Rate")} value="94.1%" sub={pick(language, "已完成/POD", "Delivered/POD")} trend={1.2} trendLabel={pick(language, "较上月", "vs last month")} accent="#10B981"
           icon={<CheckCircle2 size={16} />} />

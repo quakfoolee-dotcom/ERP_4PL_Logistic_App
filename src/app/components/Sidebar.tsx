@@ -21,8 +21,10 @@ const navItems: NavItem[] = [
     icon: <Truck size={16} />, label: "运输管理", labelEn: "Transport Mgmt", key: "transport",
     children: [
       { label: "运输订单", labelEn: "Transport Orders", key: "orders" },
+      { label: "TMS派车", labelEn: "TMS Dispatch", key: "tmsDispatch" },
       { label: "在途追踪", labelEn: "Live Tracking", key: "tracking" },
       { label: "POD管理", labelEn: "POD Management", key: "pod" },
+      { label: "货运清关", labelEn: "Freight & Customs", key: "freight" },
     ]
   },
   {
@@ -36,6 +38,7 @@ const navItems: NavItem[] = [
   {
     icon: <Building2 size={16} />, label: "合作伙伴", labelEn: "Partners", key: "partners",
     children: [
+      { label: "客户主数据", labelEn: "Customer Master", key: "customers" },
       { label: "报价管理", labelEn: "Quote Cards", key: "quotes" },
       { label: "结算对账", labelEn: "Reconciliation", key: "reconcile" },
     ]
@@ -43,6 +46,7 @@ const navItems: NavItem[] = [
   {
     icon: <Warehouse size={16} />, label: "仓储管理", labelEn: "Warehouse", key: "warehouse",
     children: [
+      { label: "WMS工作流", labelEn: "WMS Workflows", key: "wmsWorkflow" },
       { label: "操作费用", labelEn: "Handling Fees", key: "handling" },
       { label: "库存概览", labelEn: "Inventory", key: "inventory" },
     ]
@@ -50,13 +54,20 @@ const navItems: NavItem[] = [
   {
     icon: <Receipt size={16} />, label: "财务管理", labelEn: "Finance", key: "finance",
     children: [
+      { label: "财务中枢", labelEn: "Finance Hub", key: "financeHub" },
       { label: "应收发票", labelEn: "AR Invoices", key: "ar" },
       { label: "应付账款", labelEn: "AP Payables", key: "ap" },
       { label: "中转汇总", labelEn: "Transfer Summary", key: "transfer" },
     ]
   },
   { icon: <BarChart3 size={16} />, label: "业务分析", labelEn: "Analytics", key: "analytics" },
-  { icon: <ClipboardCheck size={16} />, label: "合规审计", labelEn: "Compliance", key: "compliance" },
+  {
+    icon: <ClipboardCheck size={16} />, label: "合规审计", labelEn: "Compliance", key: "complianceGroup",
+    children: [
+      { label: "合规审计", labelEn: "Compliance Audit", key: "compliance" },
+      { label: "需求覆盖", labelEn: "Requirements Coverage", key: "requirements" },
+    ]
+  },
   { icon: <Settings size={16} />, label: "系统设置", labelEn: "Settings", key: "settings" },
 ];
 
@@ -67,11 +78,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ transport: true, warehouse: true, finance: true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ transport: true, partners: true, warehouse: true, finance: true, complianceGroup: true });
 
   const toggleExpand = (key: string) => {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const isActiveItem = (item: NavItem) => item.key === activeKey || Boolean(item.children?.some((child) => child.key === activeKey));
 
   return (
     <aside className="flex flex-col h-full" style={{ background: "var(--sidebar)", width: 220 }}>
@@ -102,15 +115,15 @@ export function Sidebar({ activeKey, onSelect, language }: SidebarProps) {
               }}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg mb-0.5 transition-colors duration-150 text-left group"
               style={{
-                background: activeKey === item.key && !item.children ? "var(--sidebar-accent)" : "transparent",
-                color: activeKey === item.key && !item.children ? "var(--sidebar-accent-foreground)" : "var(--sidebar-foreground)",
+                background: isActiveItem(item) && !item.children ? "var(--sidebar-accent)" : isActiveItem(item) ? "rgba(255,255,255,0.06)" : "transparent",
+                color: isActiveItem(item) && !item.children ? "var(--sidebar-accent-foreground)" : "var(--sidebar-foreground)",
               }}
               onMouseEnter={e => {
-                if (activeKey !== item.key)
+                if (!isActiveItem(item))
                   (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)";
               }}
               onMouseLeave={e => {
-                if (activeKey !== item.key)
+                if (!isActiveItem(item))
                   (e.currentTarget as HTMLElement).style.background = "transparent";
               }}
             >

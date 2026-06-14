@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -6,6 +6,10 @@ import {
 import { Search, AlertTriangle, Clock, CheckCircle2, Package, Box, Archive, TrendingUp, X, Truck } from "lucide-react";
 import { useActionDialog } from "./ActionDialog";
 import type { AppLanguage } from "../i18n";
+import type { InventoryItem } from "../domain/orderToCashModels";
+import type { AsnReceivingRecord } from "../domain/workflowReadiness";
+import { useWorkflowSnapshot, workflowRepository } from "../repositories/workflowRepository";
+import { useOrderToCashSnapshot } from "./BackboneTracePanel";
 
 // Real FBA inventory currently stored at Brampton #25 / #10 warehouses
 // Sourced from 2026 container dispatch sheet — containers with partial or full HOLD status
@@ -62,6 +66,8 @@ const inventoryItems = [
   },
 ];
 
+type InventoryRow = typeof inventoryItems[number];
+
 // Storage days breakdown for chart
 const agingData = [
   { range: "0-7 days", count: 2, color: "#10B981" },
@@ -86,26 +92,114 @@ const statusStyle: Record<string, { bg: string; color: string; icon: React.React
   "待指令":           { bg: "#F3E8FF", color: "#7C3AED", icon: <Clock size={11} /> },
   "已部分派送":       { bg: "#D1FAE5", color: "#059669", icon: <CheckCircle2 size={11} /> },
   "已派送":           { bg: "#D1FAE5", color: "#059669", icon: <CheckCircle2 size={11} /> },
+  "Available":             { bg: "#D1FAE5", color: "#047857", icon: <CheckCircle2 size={11} /> },
 };
 
-const totalUnits = inventoryItems.reduce((s, i) => s + i.units, 0);
-const totalCBM   = inventoryItems.reduce((s, i) => s + i.cbm, 0);
-const holdCount  = inventoryItems.filter(i => i.status.startsWith("HOLD")).length;
-const pendingCount = inventoryItems.filter(i => i.status === "待派送" || i.status === "待指令").length;
+function daysSince(dateValue: string) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 0;
+  const diff = Date.now() - date.getTime();
+  return Math.max(0, Math.floor(diff / 86400000));
+}
+
+function toInventoryRow(item: InventoryItem): InventoryRow {
+  return {
+    container: item.wmsInventoryId ?? item.warehouseReceiptId,
+    warehouse: item.warehouse,
+    arrived: item.createdDate,
+    cbm: 0,
+    fbaShipment: item.warehouseReceiptId,
+    sku: item.sku,
+    desc: item.productName,
+    units: item.availableQuantity,
+    pallets: item.onHandQuantity ? `${Math.max(1, Math.ceil(item.onHandQuantity / 40))}P` : "0P",
+    destFC: "Warehouse Stock",
+    daysIn: daysSince(item.createdDate),
+    status: "Available",
+    zone: item.storageLocation.includes("WB10") ? "Zone D" : item.storageLocation.includes("HOLD") ? "Zone A" : "Zone B",
+    storageNote: `Recorded from WMS ${item.wmsInventoryId ?? item.id} at ${item.storageLocation}. Damaged: ${item.damagedQuantity}. Reserved: ${item.reservedQuantity}.`,
+  };
+}
+
+function toAsnInventoryRow(asn: AsnReceivingRecord): InventoryRow {
+  return {
+    container: asn.container,
+    warehouse: asn.warehouse,
+    arrived: asn.recordedAt ?? asn.eta,
+    cbm: 0,
+    fbaShipment: asn.id,
+    sku: `${asn.skuLines} SKU line${asn.skuLines === 1 ? "" : "s"}`,
+    desc: `${asn.customer} received inventory`,
+    units: Math.max(0, asn.receivedUnits),
+    pallets: `${Math.max(1, Math.ceil(asn.receivedUnits / 40))}P`,
+    destFC: "Warehouse Stock",
+    daysIn: daysSince(asn.recordedAt ?? asn.eta),
+    status: "Available",
+    zone: asn.putawayLocation.includes("WB10") ? "Zone D" : asn.putawayLocation.includes("HOLD") ? "Zone A" : "Zone B",
+    storageNote: `Recorded from ASN ${asn.id} at ${asn.putawayLocation}. Freight file ${asn.freightFileId}.`,
+  };
+}
+
+function dispatchIdForInventoryRow(item: InventoryRow) {
+  return `DSP-INV-${item.fbaShipment.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 36).toUpperCase()}`;
+}
+
+function palletCount(item: InventoryRow) {
+  const parsed = Number.parseInt(String(item.pallets), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Math.max(1, Math.ceil(item.units / 40));
+}
+
+function customerFromInventoryRow(item: InventoryRow) {
+  const match = item.desc.match(/^(.+?) received inventory$/);
+  return match?.[1] ?? "FBA Seller";
+}
+
+function dispatchDestination(item: InventoryRow) {
+  return item.destFC === "Warehouse Stock" ? "Customer destination TBD" : item.destFC;
+}
 
 export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
   void language;
+  const orderToCashSnapshot = useOrderToCashSnapshot();
+  const workflowSnapshot = useWorkflowSnapshot();
   const { promptDialog, ActionDialog } = useActionDialog();
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState("全部");
   const [statusFilter, setStatusFilter] = useState("全部");
-  const [selected, setSelected] = useState<typeof inventoryItems[0] | null>(null);
-  const [items, setItems] = useState(inventoryItems);
+  const [selected, setSelected] = useState<InventoryRow | null>(null);
+  const [items, setItems] = useState<InventoryRow[]>(inventoryItems);
+  const wmsInventoryRows = useMemo(() => {
+    const backboneRows = orderToCashSnapshot.inventoryItems.map(toInventoryRow);
+    const backboneContainers = new Set(backboneRows.map((item) => item.container));
+    const asnRows = workflowSnapshot.asns
+      .filter((asn) => asn.inventoryStatus === "recorded" && !backboneContainers.has(asn.container))
+      .map(toAsnInventoryRow);
+    return [...asnRows, ...backboneRows];
+  }, [orderToCashSnapshot.inventoryItems, workflowSnapshot.asns]);
+  const combinedItems = useMemo(() => {
+    const wmsKeys = new Set(wmsInventoryRows.map((item) => `${item.container}-${item.fbaShipment}`));
+    return [...wmsInventoryRows, ...items.filter((item) => !wmsKeys.has(`${item.container}-${item.fbaShipment}`))];
+  }, [items, wmsInventoryRows]);
+  const totalUnitsLive = combinedItems.reduce((sum, item) => sum + item.units, 0);
+  const totalCbmLive = combinedItems.reduce((sum, item) => sum + item.cbm, 0);
+  const holdCountLive = combinedItems.filter((item) => item.status.startsWith("HOLD")).length;
+  const pendingCountLive = combinedItems.filter((item) => item.status === "待派送" || item.status === "待指令").length;
+  const avgDaysLive = combinedItems.length ? Math.round(combinedItems.reduce((sum, item) => sum + item.daysIn, 0) / combinedItems.length) : 0;
 
-  function requestDispatch(container: string) {
-    setItems(p => p.map(i => i.container === container ? { ...i, status: "待派送" } : i));
-    if (selected?.container === container) setSelected(p => p ? { ...p, status: "待派送" } : p);
-    toast.success(`Dispatch requested for ${container}`, { description: "Status updated to 待派送." });
+  function requestDispatch(item: InventoryRow) {
+    const result = workflowRepository.requestInventoryDispatch({
+      sourceId: item.fbaShipment,
+      customer: customerFromInventoryRow(item),
+      warehouse: item.warehouse,
+      container: item.container,
+      units: item.units,
+      pallets: palletCount(item),
+      destination: dispatchDestination(item),
+      note: `Requested from Inventory for ${item.container} / ${item.fbaShipment}. ${item.storageNote}`,
+    });
+    setItems((previous) => previous.map((row) => row.container === item.container && row.fbaShipment === item.fbaShipment ? { ...row, status: "待派送" } : row));
+    if (selected?.container === item.container && selected?.fbaShipment === item.fbaShipment) setSelected((previous) => previous ? { ...previous, status: "待派送" } : previous);
+    toast[result.ok ? "success" : "error"](result.message, { description: result.ok ? `TMS dispatch ${dispatchIdForInventoryRow(item)} is ready for carrier assignment.` : undefined });
   }
   function flagHold(container: string) {
     setItems(p => p.map(i => i.container === container ? { ...i, status: "HOLD — 换标中" } : i));
@@ -117,7 +211,7 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
     if (selected?.container === container) setSelected(p => p ? { ...p, status: "分货中" } : p);
     toast.info(`${container} marked as sorting in progress`);
   }
-  async function addStorageNote(item: typeof inventoryItems[0]) {
+  async function addStorageNote(item: InventoryRow) {
     const note = await promptDialog(`Add note for ${item.container}`);
     if (!note) return;
     setItems(p => p.map(i => i.container === item.container && i.fbaShipment === item.fbaShipment ? { ...i, storageNote: i.storageNote + ` | ${note}` } : i));
@@ -126,9 +220,9 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
   }
 
   const zones = ["全部", "Zone A", "Zone B", "Zone C", "Zone D"];
-  const statuses = ["全部", "HOLD — 换标中", "待派送", "分货中", "待指令", "已部分派送", "已派送"];
+  const statuses = ["全部", "HOLD — 换标中", "待派送", "分货中", "待指令", "已部分派送", "已派送", "Available"];
 
-  const filtered = items.filter(item => {
+  const filtered = combinedItems.filter(item => {
     const matchSearch = search === "" ||
       item.container.toLowerCase().includes(search.toLowerCase()) ||
       item.fbaShipment.toLowerCase().includes(search.toLowerCase()) ||
@@ -138,6 +232,7 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
     const matchStatus = statusFilter === "全部" || item.status === statusFilter;
     return matchSearch && matchZone && matchStatus;
   });
+  const selectedDispatch = selected ? workflowSnapshot.dispatches.find((dispatch) => dispatch.id === dispatchIdForInventoryRow(selected)) : null;
 
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-5">
@@ -146,11 +241,11 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
       {/* KPI Row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
         {[
-          { label: "在库总件数", labelEn: "Total Units In-Store", value: totalUnits.toLocaleString(), color: "#1C64F2", icon: <Box size={16}/> },
-          { label: "占用体积", labelEn: "Total CBM", value: `${totalCBM.toFixed(1)} m³`, color: "#0D9488", icon: <Archive size={16}/> },
-          { label: "活跃柜子", labelEn: "Active Containers", value: `${inventoryItems.length}`, color: "#8B5CF6", icon: <Package size={16}/> },
-          { label: "HOLD / 待指令", labelEn: "On Hold / Awaiting", value: `${holdCount + pendingCount}`, color: "#F59E0B", icon: <Clock size={16}/> },
-          { label: "库存周转率", labelEn: "Avg Days In Store", value: `${Math.round(inventoryItems.reduce((s,i)=>s+i.daysIn,0)/inventoryItems.length)}d`, color: "#10B981", icon: <TrendingUp size={16}/> },
+          { label: "在库总件数", labelEn: "Total Units In-Store", value: totalUnitsLive.toLocaleString(), color: "#1C64F2", icon: <Box size={16}/> },
+          { label: "占用体积", labelEn: "Total CBM", value: `${totalCbmLive.toFixed(1)} m³`, color: "#0D9488", icon: <Archive size={16}/> },
+          { label: "活跃柜子", labelEn: "Active Containers", value: `${combinedItems.length}`, color: "#8B5CF6", icon: <Package size={16}/> },
+          { label: "HOLD / 待指令", labelEn: "On Hold / Awaiting", value: `${holdCountLive + pendingCountLive}`, color: "#F59E0B", icon: <Clock size={16}/> },
+          { label: "库存周转率", labelEn: "Avg Days In Store", value: `${avgDaysLive}d`, color: "#10B981", icon: <TrendingUp size={16}/> },
         ].map((k, i) => (
           <div key={i} className="bg-card rounded-xl border p-4 flex items-start justify-between"
             style={{ borderColor: "var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
@@ -244,11 +339,11 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
         </div>
 
         <div className="flex gap-1 ml-2">
-          {["全部", "HOLD", "待派送", "分货中", "已派送"].map(s => {
-            const match = s === "全部" ? "全部" : s === "HOLD" ? "HOLD — 换标中" : s === "已派送" ? "已派送" : s;
-            const active = statusFilter === "全部" ? s === "全部" : statusFilter.startsWith(s === "HOLD" ? "HOLD" : s);
+          {statuses.map(s => {
+            const match = s;
+            const active = statusFilter === "全部" ? s === "全部" : statusFilter === match;
             return (
-              <button key={s} onClick={() => setStatusFilter(s === "全部" ? "全部" : match)}
+              <button key={s} onClick={() => setStatusFilter(match)}
                 className="px-2.5 py-1 rounded-lg text-xs transition-colors"
                 style={{
                   background: active ? "var(--primary)" : "var(--muted)",
@@ -357,16 +452,22 @@ export function InventoryView({ language = "zh" }: { language?: AppLanguage }) {
                   </div>
                 ))}
               </div>
+              {selectedDispatch && (
+                <div className="mb-4 w-fit rounded-lg px-3 py-1.5 text-xs" style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", color: "#1D4ED8" }}>
+                  <span style={{ fontWeight: 800 }}>TMS Dispatch</span>
+                  <span className="ml-2" style={{ fontFamily: "monospace", fontWeight: 800 }}>{selectedDispatch.id} · {selectedDispatch.status}</span>
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap">
-                {(selected.status === "待派送" || selected.status === "待指令") && (
-                  <button onClick={() => requestDispatch(selected.container)}
+                {(selected.status === "待派送" || selected.status === "待指令" || selected.status === "Available") && (
+                  <button onClick={() => requestDispatch(selected)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
                     style={{ background: "var(--primary)", color: "white" }}>
                     <Truck size={12} /> Request Dispatch
                   </button>
                 )}
                 {selected.status === "分货中" && (
-                  <button onClick={() => requestDispatch(selected.container)}
+                  <button onClick={() => requestDispatch(selected)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
                     style={{ background: "#10B981", color: "white" }}>
                     <CheckCircle2 size={12} /> Mark Sorting Done → Dispatch

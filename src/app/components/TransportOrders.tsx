@@ -29,6 +29,13 @@ function formatCAD(value: number) {
   return `CAD $${value.toLocaleString("en-CA")}`;
 }
 
+function monthRangeLabel(orders: TransportOrder[]) {
+  const months = Array.from(new Set(orders.map((order) => order.eta.slice(0, 7)).filter(Boolean))).sort();
+  if (months.length === 0) return "No ETA";
+  if (months.length === 1) return months[0];
+  return `${months[0]} to ${months[months.length - 1]}`;
+}
+
 interface TransportOrdersProps {
   orders: TransportOrder[];
   onUpdateOrder: (order: TransportOrder) => void;
@@ -50,12 +57,13 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
   const [actionsFor, setActionsFor] = useState<string | null>(null);
   const effectiveStatus = statusFilter !== "全部" ? statusFilter : externalStatus;
   const effectiveSearch = `${search} ${externalSearch}`.trim().toLowerCase();
+  const etaRange = monthRangeLabel(orders);
 
   const filtered = orders.filter(o =>
     (effectiveStatus === "全部" || o.status === effectiveStatus) &&
     (advanced.type === "全部" || o.type === advanced.type) &&
-    (!advanced.from || o.created >= advanced.from) &&
-    (!advanced.to || o.created <= advanced.to) &&
+    (!advanced.from || o.eta >= advanced.from) &&
+    (!advanced.to || o.eta <= advanced.to) &&
     (!advanced.minRevenue || moneyValue(o.amount) >= Number(advanced.minRevenue)) &&
     (effectiveSearch === "" ||
      o.id.toLowerCase().includes(effectiveSearch) ||
@@ -157,7 +165,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
       {/* Summary strip */}
       <div className="grid gap-3 mb-5" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         {[
-          { label: pick(language, "订单总数（2026年4月 + 2025年11月）", "Total Orders (Apr 2026 + Nov 2025)"), value: String(orders.length), color: "#1C64F2" },
+          { label: pick(language, `订单总数（ETA ${etaRange}）`, `Total Orders (ETA ${etaRange})`), value: String(orders.length), color: "#1C64F2" },
           { label: orderStatusLabel("已完成", language), value: String(orders.filter((order) => order.status === "已完成").length), color: "#10B981" },
           { label: orderStatusLabel("运输中", language), value: String(orders.filter((order) => order.status === "运输中").length), color: "#1C64F2" },
           { label: orderStatusLabel("异常", language), value: String(orders.filter((order) => order.status === "异常").length), color: "#EF4444" },
@@ -200,10 +208,10 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
       </div>
       {showAdvanced && (
         <div className="bg-card rounded-xl border mb-4 px-4 py-3 grid gap-3" style={{ borderColor: "var(--border)", gridTemplateColumns: "repeat(5, minmax(120px, 1fr))" }}>
-          <FilterField label={pick(language, "创建日期从", "Created From")}>
+          <FilterField label={pick(language, "ETA从", "ETA From")}>
             <input type="date" value={advanced.from} onChange={(event) => { setAdvanced((current) => ({ ...current, from: event.target.value })); setPage(1); }} className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
           </FilterField>
-          <FilterField label={pick(language, "创建日期到", "Created To")}>
+          <FilterField label={pick(language, "ETA到", "ETA To")}>
             <input type="date" value={advanced.to} onChange={(event) => { setAdvanced((current) => ({ ...current, to: event.target.value })); setPage(1); }} className="w-full px-2 py-1.5 rounded-lg border text-xs outline-none" style={{ borderColor: "var(--border)", background: "var(--input-background)" }} />
           </FilterField>
           <FilterField label={pick(language, "类型", "Type")}>
@@ -229,8 +237,8 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
           <thead>
             <tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
               {(language === "en"
-                ? ["Order ID", "Customer", "Origin → Destination", "Driver", "Type", "Pallets", "Status", "Revenue (CAD)", "Cost (CAD)", "Profit", "POD", "Date", "Actions"]
-                : ["订单号", "客户", "起点 → 终点", "司机", "类型", "托盘", "状态", "收入(CAD)", "成本(CAD)", "利润", "POD", "日期", "操作"]).map((h, i) => (
+                ? ["Order ID", "Customer", "Origin → Destination", "Driver", "Type", "Pallets", "Status", "Revenue (CAD)", "Cost (CAD)", "Profit", "POD", "ETA", "Actions"]
+                : ["订单号", "客户", "起点 → 终点", "司机", "类型", "托盘", "状态", "收入(CAD)", "成本(CAD)", "利润", "POD", "ETA", "操作"]).map((h, i) => (
                 <th key={i} className="px-3 py-2.5 text-left whitespace-nowrap"
                   style={{ fontSize: 11, color: "var(--muted-foreground)", fontWeight: 500 }}>{h}</th>
               ))}
@@ -271,7 +279,7 @@ export function TransportOrders({ orders, onUpdateOrder, onAddOrder, externalSea
                     {podLabel(order.pod, language)}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)", fontFamily: "monospace" }}>{order.created}</td>
+                <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)", fontFamily: "monospace" }}>{order.eta}</td>
                 <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
                     <button onClick={() => setSelectedOrder(order)} className="p-1 rounded hover:bg-muted" style={{ color: "var(--primary)" }} title={pick(language, "查看详情", "View Detail")}><Eye size={13} /></button>

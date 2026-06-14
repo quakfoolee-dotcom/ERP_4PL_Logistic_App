@@ -4,6 +4,8 @@ import { Calculator, Clock, Truck, Download, Copy, Plus, Edit2, Save, X } from "
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
+import { orderToCashRepository } from "../repositories/orderToCashRepository";
+import { getCustomerReadinessProjection } from "../repositories/projections";
 
 type RateUnit = "pallet" | "load" | "stop" | "hour" | "shipment";
 type RateStatus = "active" | "draft" | "inactive";
@@ -200,13 +202,17 @@ function createBlankRateItem(): RateCardItem {
   };
 }
 
-export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
+export function PartnerQuotes({ language = "zh", initialCustomerId }: { language?: AppLanguage; initialCustomerId?: string }) {
+  const customerOptions = getCustomerReadinessProjection().customers;
+  const preferredCustomer = customerOptions.find((customer) => customer.id === initialCustomerId) ?? customerOptions[0];
   const [rateItems, setRateItems] = useState<RateCardItem[]>(initialRateItems);
   const [rateHistory, setRateHistory] = useState(initialRateHistory);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(preferredCustomer?.id ?? "");
   const [selectedRateId, setSelectedRateId] = useState(initialRateItems[0].id);
   const [pallets, setPallets] = useState(20);
-  const [savedQuotes, setSavedQuotes] = useState<{ zone: string; pallets: number; cost: number; date: string }[]>([]);
+  const [savedQuotes, setSavedQuotes] = useState<{ customer: string; zone: string; pallets: number; cost: number; date: string }[]>([]);
   const [editingItem, setEditingItem] = useState<RateCardItem | null>(null);
+  const selectedCustomer = customerOptions.find((customer) => customer.id === selectedCustomerId) ?? preferredCustomer;
 
   const activePalletRates = useMemo(
     () => rateItems.filter((item) => item.status === "active" && item.unit === "pallet"),
@@ -292,10 +298,23 @@ export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
   }
 
   function saveQuote() {
-    if (!selectedRate) return;
-    const q = { zone: selectedRate.zone, pallets, cost: estimated, date: new Date().toLocaleDateString("en-CA") };
+    if (!selectedRate || !selectedCustomer) return;
+    const rateSheetVersion = `QUOTE-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${selectedCustomer.name.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase()}`;
+    orderToCashRepository.createCustomerQuotation({
+      customerId: selectedCustomer.id,
+      rateSheetVersion,
+      quotedAmountCad: estimated,
+      quoteNote: `${selectedRate.zone} - ${pallets}P - ${unitLabel(selectedRate.unit, language)} CAD $${selectedRate.rate}/unit`,
+      owner: selectedCustomer.owner,
+    });
+    try {
+      window.localStorage.setItem("erp4pl.rateCardCustomerId", selectedCustomer.id);
+    } catch {
+      // localStorage can be unavailable in restricted browser contexts.
+    }
+    const q = { customer: selectedCustomer.name, zone: selectedRate.zone, pallets, cost: estimated, date: new Date().toLocaleDateString("en-CA") };
     setSavedQuotes((previous) => [q, ...previous.slice(0, 4)]);
-    toast.success(`Quote saved: ${selectedRate.zone} · ${pallets}P · CAD $${estimated.toLocaleString()}`);
+    toast.success(pick(language, `报价已保存：${selectedCustomer.name}`, `Quote saved for ${selectedCustomer.name}`));
   }
 
   function copyQuote() {
@@ -500,6 +519,20 @@ export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
             </div>
           </div>
 
+          <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 10, padding: 10, background: "var(--muted)" }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-foreground)", display: "block", marginBottom: 6 }}>{pick(language, "报价客户", "Quote Customer")}</label>
+            <select value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)} style={{ ...fieldStyle, background: "var(--card)" }}>
+              {customerOptions.map((customer) => (
+                <option key={customer.id} value={customer.id}>{customer.name} - {customer.stage}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: "var(--muted-foreground)", marginTop: 6 }}>
+              {selectedCustomer
+                ? pick(language, `当前报价会回写到 ${selectedCustomer.name} 的客户流程。`, `Quote will update ${selectedCustomer.name}'s customer workflow.`)
+                : pick(language, "请先在客户主数据中创建客户。", "Create a customer in Customer Master first.")}
+            </div>
+          </div>
+
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", display: "block", marginBottom: 6 }}>{pick(language, "选择区域", "Select Zone")}</label>
             <select value={selectedRate?.id ?? ""} onChange={(event) => setSelectedRateId(event.target.value)} style={fieldStyle}>
@@ -549,7 +582,7 @@ export function PartnerQuotes({ language = "zh" }: { language?: AppLanguage }) {
             <div style={{ marginTop: 12, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted-foreground)", marginBottom: 6 }}>{pick(language, "最近报价", "Recent Quotes")}</div>
               {savedQuotes.map((quote, index) => (
-                <div key={`${quote.zone}-${index}`} className="flex justify-between items-center py-1.5" style={{ borderBottom: "1px solid var(--border)", fontSize: 11 }}>
+                <div key={`${quote.customer}-${quote.zone}-${index}`} className="flex justify-between items-center py-1.5" style={{ borderBottom: "1px solid var(--border)", fontSize: 11 }}>
                   <span style={{ color: "var(--muted-foreground)" }}>{quote.zone} · {quote.pallets}P</span>
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>CAD ${quote.cost.toLocaleString()}</span>
                 </div>
