@@ -2,7 +2,7 @@ import { formatMoney } from "./money";
 import type { ErpSeedData, InvoiceStatus, Location, Money, Organization, PayableStatus } from "./models";
 
 export type FinanceStatusKey = "pending" | "issued" | "paid" | "overdue" | "approved" | "scheduled" | "completed";
-export type ReconciliationStatus = "matched" | "unmatched" | "disputed";
+export type ReconciliationStatus = "matched" | "partial" | "unmatched" | "disputed";
 
 export interface FinanceInvoiceRow {
   id: string;
@@ -62,6 +62,9 @@ export interface ReconciliationRow {
   customer: string;
   invoiceAmt: number;
   driverCost: number;
+  depositedAmt?: number;
+  openAmt?: number;
+  bankReference?: string;
   status: ReconciliationStatus;
   note?: string;
 }
@@ -241,7 +244,7 @@ export function buildFinanceProjection(data: ErpSeedData): FinanceProjection {
 export function summarizeFinance(projection: FinanceProjection) {
   const totalAr = sumMoney(projection.invoices.map((invoice) => ({ amountCents: Number(invoice.total.replace(/[^0-9.-]/g, "")) * 100, currency: "CAD" })));
   const totalAp = sumMoney(projection.payables.map((payable) => ({ amountCents: Number(payable.total.replace(/[^0-9.-]/g, "")) * 100, currency: "CAD" })));
-  const collected = sumMoney(projection.invoices.filter((invoice) => invoice.status === "paid").map((invoice) => ({ amountCents: Number(invoice.total.replace(/[^0-9.-]/g, "")) * 100, currency: "CAD" })));
+  const collected = sumMoney(projection.reconciliationRows.map((row) => ({ amountCents: (row.depositedAmt ?? 0) * 100, currency: "CAD" })));
   const overdue = sumMoney(projection.invoices.filter((invoice) => invoice.status === "overdue").map((invoice) => ({ amountCents: Number(invoice.total.replace(/[^0-9.-]/g, "")) * 100, currency: "CAD" })));
 
   return {
@@ -250,5 +253,7 @@ export function summarizeFinance(projection: FinanceProjection) {
     collected: compactMoney(collected),
     pendingInvoices: String(projection.invoices.filter((invoice) => invoice.status === "pending").length),
     overdue: compactMoney(overdue),
+    unmatchedDeposits: String(projection.reconciliationRows.filter((row) => row.status === "unmatched" || row.status === "partial").length),
+    disputedAmount: compactMoney(sumMoney(projection.reconciliationRows.filter((row) => row.status === "disputed").map((row) => ({ amountCents: row.invoiceAmt * 100, currency: "CAD" })))),
   };
 }

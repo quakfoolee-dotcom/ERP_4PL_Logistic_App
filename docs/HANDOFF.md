@@ -90,7 +90,13 @@ Finance Hub: BQ-INV-ASN-2026-07-04-RW0D -> Ready
 - AR Invoices subscribes to the order-to-cash backbone and can mark invoices issued, paid, or overdue.
 - AR invoice detail now shows the invoice's accounting sync status, reference, last sync time, and any sync error.
 - Marking AR as paid creates a payment record and updates invoice collection/reconciliation state.
-- Reconciliation now refreshes from order-to-cash invoice state, so paid invoices can appear as matched rows.
+- Reconciliation now refreshes from order-to-cash invoice/payment/bank deposit state, so paid and partially paid invoices show matched or partial cash status.
+- Reconciliation actions now call the order-to-cash repository:
+  - Match creates/updates a bank deposit and payment.
+  - Partial records deposited cash and leaves open AR.
+  - Write-off closes the remaining AR balance with an audit timeline note.
+  - Dispute flags the invoice and AR collection as exception.
+- Finance overview cash KPIs now calculate collected cash from deposited/payment-backed reconciliation rows and show unmatched/partial and disputed cash indicators.
 
 Verified finance-to-cash browser flow:
 
@@ -99,8 +105,8 @@ Finance Hub: BQ-INV-ASN-2026-07-04-RW0D -> Invoice
 Billing Queue: Invoiced
 Accounting Sync: SYNC-INV-ASN-2026-07-04-RW0D -> Ready to Sync
 Accounting Sync: Fail -> Retry -> QB Ref -> Synced
-AR Invoices: INV-ASN-2026-07-04-RW0D -> Paid
-Reconciliation: INV-ASN-2026-07-04-RW0D -> Matched
+Reconciliation: Bank Deposit -> Match / Partial / Write-off / Dispute
+Finance Overview: Collected / Unmatched-Partial / Disputed KPIs refresh from repository state
 ```
 
 ### Bilingual UI
@@ -157,15 +163,26 @@ QuickBooks/accounting sync row
 -> invoice detail visibility
 ```
 
-Current gap:
+Completed in this pass:
 
 ```text
 Bank deposit matching
--> statement-level reconciliation
+-> partial payment handling
+-> AR write-off
+-> AR dispute
 -> cash KPI reporting
 ```
 
-The invoice issue, accounting sync actions, AR payment, and basic reconciliation handoff are now wired. Remaining work is deeper cash behavior: bank deposits, partial payments, write-offs against AR, disputes, and dashboard cash KPIs.
+The invoice issue, accounting sync actions, AR payment, bank deposit matching, partial payment, write-off, dispute, and basic cash KPI handoff are now wired.
+
+Current gap:
+
+```text
+Bank statement import
+-> automatic match suggestion
+-> AP/Transfer workflow-backed rows
+-> cash dashboard drilldown
+```
 
 ### Backend And Auth Not Implemented
 
@@ -193,23 +210,22 @@ The following are modeled but not truly integrated:
 
 ## Next Recommended Implementation
 
-Implement the bank reconciliation and cash handoff:
+Implement statement import and remaining finance backing data:
 
-1. Add bank deposit matching records tied to payments and invoices.
-2. Add partial payment, write-off, and dispute actions in AR.
-3. Update dashboard cash KPIs from order-to-cash invoice/payment state.
-4. Replace static AP/Transfer rows with workflow/order-to-cash-backed rows.
-5. Add backend-ready audit fields for bank statement import/source references.
+1. Add bank statement import/mock upload rows with source filename, bank account, statement date, and transaction reference.
+2. Auto-suggest invoice matches by customer/reference/amount/date.
+3. Replace static AP/Transfer rows with workflow/order-to-cash-backed rows.
+4. Add cash dashboard drilldowns from KPI cards to underlying invoice/deposit rows.
+5. Add backend-ready audit fields for imported bank statement source references.
 
 Acceptance test for next gap:
 
 ```text
-Invoice is synced to QuickBooks
--> receive partial bank deposit
--> match deposit to invoice
--> write off or dispute remaining balance
--> reconciliation shows matched/partial/exception state
--> dashboard cash KPIs reflect paid/overdue/collected totals
+Bank statement row is imported
+-> suggested invoice match is shown
+-> finance accepts or rejects match
+-> reconciliation row updates matched/partial/exception state
+-> dashboard KPI drills into the exact deposit/payment rows
 ```
 
 ## Verification Run

@@ -256,6 +256,22 @@ export interface Payment extends BaseWorkflowEntity {
   clearedDate?: string;
   paymentClearedStatus: WorkflowStatus;
   proofDocumentId?: string;
+  bankDepositId?: string;
+  bankReference?: string;
+}
+
+export interface BankDeposit extends BaseWorkflowEntity {
+  depositId: string;
+  bankAccount: string;
+  customerId?: string;
+  invoiceId?: string;
+  amountCad: number;
+  receivedDate: string;
+  reference: string;
+  memo?: string;
+  matchStatus: "unmatched" | "matched" | "partial" | "exception";
+  matchedAmountCad?: number;
+  openAmountCad?: number;
 }
 
 export interface ARCollection extends BaseWorkflowEntity {
@@ -351,6 +367,7 @@ export interface OrderToCashSeedData {
   returnRecords: ReturnRecord[];
   invoices: Invoice[];
   payments: Payment[];
+  bankDeposits: BankDeposit[];
   arCollections: ARCollection[];
   exceptionCases: ExceptionCase[];
   documents: DocumentLink[];

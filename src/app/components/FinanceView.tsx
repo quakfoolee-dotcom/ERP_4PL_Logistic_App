@@ -238,6 +238,8 @@ function FinanceOverview({ language, summary = financeSummary }: { language: App
           { label: pick(language, "已收款", "Collected"), value: summary.collected, color: "#10B981" },
           { label: pick(language, "待开发票", "Pending Invoices"), value: summary.pendingInvoices, color: "#F59E0B" },
           { label: pick(language, "逾期账款", "Overdue"), value: summary.overdue, color: "#EF4444" },
+          { label: pick(language, "\u672a\u5339\u914d/\u90e8\u5206", "Unmatched / Partial"), value: summary.unmatchedDeposits, color: "#B45309" },
+          { label: pick(language, "\u4e89\u8bae\u91d1\u989d", "Disputed Amount"), value: summary.disputedAmount, color: "#DC2626" },
         ]}
       />
 

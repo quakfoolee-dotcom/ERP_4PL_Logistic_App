@@ -1,5 +1,6 @@
 import type {
   ARCollection,
+  BankDeposit,
   CarrierShipment,
   Customer,
   CustomerOrder,
@@ -349,7 +350,11 @@ export const orderToCashInvoices: Invoice[] = [
 ];
 
 export const orderToCashPayments: Payment[] = [
-  { ...base({ id: "pay-fba-0139", customerId: "cust-fba-seller", status: "submitted", owner: "Finance", createdDate: "2026-05-08", relatedRecords: [related("invoice", "inv-fba-2026-0139")] }), invoiceId: "inv-fba-2026-0139", paymentMethod: "eft", amountCad: 3286.04, receivedDate: "2026-05-08", paymentClearedStatus: "pending_review" },
+  { ...base({ id: "pay-fba-0139", customerId: "cust-fba-seller", status: "submitted", owner: "Finance", createdDate: "2026-05-08", relatedRecords: [related("invoice", "inv-fba-2026-0139")] }), invoiceId: "inv-fba-2026-0139", paymentMethod: "eft", amountCad: 3286.04, receivedDate: "2026-05-08", paymentClearedStatus: "pending_review", bankDepositId: "dep-fba-0139", bankReference: "EFT-FBA-0508" },
+];
+
+export const orderToCashBankDeposits: BankDeposit[] = [
+  { ...base({ id: "dep-fba-0139", customerId: "cust-fba-seller", status: "submitted", owner: "Finance", createdDate: "2026-05-08", relatedRecords: [related("invoice", "inv-fba-2026-0139")] }), depositId: "DEP-2026-0508-FBA", bankAccount: "RBC Operating CAD", customerId: "cust-fba-seller", invoiceId: "inv-fba-2026-0139", amountCad: 3286.04, receivedDate: "2026-05-08", reference: "EFT-FBA-0508", memo: "Customer EFT awaiting final bank reconciliation.", matchStatus: "partial", matchedAmountCad: 3286.04, openAmountCad: 0 },
 ];
 
 export const orderToCashARCollections: ARCollection[] = [
@@ -412,6 +417,7 @@ export const orderToCashSeed: OrderToCashSeedData = {
   returnRecords: orderToCashReturnRecords,
   invoices: orderToCashInvoices,
   payments: orderToCashPayments,
+  bankDeposits: orderToCashBankDeposits,
   arCollections: orderToCashARCollections,
   exceptionCases: orderToCashExceptionCases,
   documents: orderToCashDocuments,

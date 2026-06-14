@@ -5,10 +5,11 @@ import { useActionDialog } from "./ActionDialog";
 import { pick, type AppLanguage } from "../i18n";
 import type { ReconciliationStatus } from "../domain/financeProjection";
 import { getFinanceProjection } from "../repositories/projections";
+import { orderToCashRepository } from "../repositories/orderToCashRepository";
 import { useOrderToCashSnapshot } from "./BackboneTracePanel";
 
 type RecStatus = ReconciliationStatus;
-interface RecRow { id: string; customer: string; invoiceAmt: number; driverCost: number; status: RecStatus; note?: string; }
+interface RecRow { id: string; customer: string; invoiceAmt: number; driverCost: number; depositedAmt?: number; openAmt?: number; bankReference?: string; status: RecStatus; note?: string; }
 
 const init: RecRow[] = [
   { id:"2026-0131", customer:"AP-LLL",      invoiceAmt:2245, driverCost:1540, status:"matched" },
@@ -24,9 +25,10 @@ const init: RecRow[] = [
 ];
 
 const sm: Record<RecStatus,{label:string;labelEn:string;color:string;bg:string}> = {
-  matched:   { label:"已对账",  labelEn:"Matched",   color:"#047857", bg:"#d1fae5" },
-  unmatched: { label:"未匹配",  labelEn:"Unmatched", color:"#b91c1c", bg:"#fee2e2" },
-  disputed:  { label:"争议中",  labelEn:"Disputed",  color:"#b45309", bg:"#fef3c7" },
+  matched:   { label:"\u5df2\u5bf9\u8d26",  labelEn:"Matched",   color:"#047857", bg:"#d1fae5" },
+  partial:   { label:"\u90e8\u5206\u5339\u914d",  labelEn:"Partial",   color:"#b45309", bg:"#fef3c7" },
+  unmatched: { label:"\u672a\u5339\u914d",  labelEn:"Unmatched", color:"#b91c1c", bg:"#fee2e2" },
+  disputed:  { label:"\u4e89\u8bae\u4e2d",  labelEn:"Disputed",  color:"#b45309", bg:"#fef3c7" },
 };
 const card: React.CSSProperties = { background:"var(--card)", borderRadius:12, border:"1px solid var(--border)", boxShadow:"0 1px 4px rgba(0,0,0,.04)" };
 const th: React.CSSProperties = { background:"var(--muted)", fontSize:11, fontWeight:600, padding:"8px 12px", textAlign:"left", color:"var(--muted-foreground)" };
@@ -54,9 +56,14 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
   const totalAP    = rows.reduce((s,r)=>s+r.driverCost,0);
   const net        = totalAR - totalAP;
   const unmatched  = rows.filter(r=>r.status==="unmatched").length;
+  const partial    = rows.filter(r=>r.status==="partial").length;
   const disputed   = rows.filter(r=>r.status==="disputed").length;
 
   const displayed = filter==="all" ? rows : rows.filter(r=>r.status===filter);
+
+  function refreshRows() {
+    setRows(getFinanceProjection().reconciliationRows);
+  }
 
   function startEdit(row: RecRow) {
     setEditingId(row.id);
@@ -92,35 +99,64 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
   }
 
   function matchRow(id: string) {
-    setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:undefined}:r));
-    toast.success(`${id} matched ✓`);
+    const invoice = orderToCashRepository.matchInvoiceBankDeposit(id);
+    refreshRows();
+    if (invoice) toast.success(`${id} matched`);
+    else toast.error(`${id} not found`);
   }
+
+  async function partialRow(id: string) {
+    const amount = await promptDialog(pick(language, "\u90e8\u5206\u4ed8\u6b3e\u91d1\u989d", "Partial Payment Amount"), { message: pick(language, "\u8f93\u5165\u5df2\u5230\u8d26\u94f6\u884c\u91d1\u989d\uff08CAD\uff09\u3002", "Enter received bank amount in CAD.") });
+    if (!amount) return;
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error(pick(language, "\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d", "Enter a valid amount"));
+      return;
+    }
+    const reference = await promptDialog(pick(language, "\u94f6\u884c\u53c2\u8003\u53f7", "Bank Reference"), { defaultValue: `PARTIAL-${id}` });
+    const invoice = orderToCashRepository.markInvoicePartialPayment(id, value, reference ?? undefined);
+    refreshRows();
+    if (invoice) toast.success(`${id} partial payment matched`);
+    else toast.error(`${id} not found`);
+  }
+
   async function disputeRow(id: string) {
-    const reason = await promptDialog(pick(language, "争议原因", "Dispute Reason"));
+    const reason = await promptDialog(pick(language, "\u4e89\u8bae\u539f\u56e0", "Dispute Reason"));
     if (!reason) return;
-    setRows(p=>p.map(r=>r.id===id?{...r,status:"disputed",note:reason}:r));
-    toast.warning("Dispute flagged", { description: reason });
+    const invoice = orderToCashRepository.disputeInvoiceCollection(id, reason);
+    refreshRows();
+    if (invoice) toast.warning("Dispute flagged", { description: reason });
+    else toast.error(`${id} not found`);
   }
+
   function resolveRow(id: string) {
-    setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:undefined}:r));
-    toast.success(`Dispute resolved — ${id} matched`);
+    const invoice = orderToCashRepository.matchInvoiceBankDeposit(id);
+    refreshRows();
+    if (invoice) toast.success(`Dispute resolved - ${id} matched`);
+    else toast.error(`${id} not found`);
   }
+
   function escalateRow(id: string) {
-    setRows(p=>p.map(r=>r.id===id?{...r,status:"disputed",note:`${r.note || "Dispute"} · Escalated to management`}:r));
+    orderToCashRepository.disputeInvoiceCollection(id, "Dispute escalated to management.");
+    refreshRows();
     toast.warning(`${id} escalated`, { description: "Row remains in disputed status with escalation note." });
   }
+
   async function writeOffRow(id: string) {
-    const ok = await confirmDialog(pick(language, "核销对账", "Write Off Reconciliation"), { message: pick(language, `核销 ${id}？这会用零调整标记为已对账。`, `Write off ${id}? This marks it as matched with a zero-cost adjustment.`) });
+    const ok = await confirmDialog(pick(language, "\u6838\u9500\u5bf9\u8d26", "Write Off Reconciliation"), { message: pick(language, `\u6838\u9500 ${id}\uff1f\u8fd9\u4f1a\u5173\u95ed\u5269\u4f59\u5e94\u6536\u4f59\u989d\u3002`, `Write off ${id}? This closes the remaining AR balance.`) });
     if (!ok) return;
-    setRows(p=>p.map(r=>r.id===id?{...r,status:"matched",note:"Written off — zero adjustment"}:r));
-    toast.info(`${id} written off`);
+    const invoice = orderToCashRepository.writeOffInvoiceBalance(id);
+    refreshRows();
+    if (invoice) toast.info(`${id} written off`);
+    else toast.error(`${id} not found`);
   }
+
   function exportCSV() {
-    const header = "Invoice#,Customer,Invoice Amount (CAD),Driver Cost (CAD),Gross Margin,Margin %,Status,Notes";
+    const header = "Invoice#,Customer,Invoice Amount (CAD),Deposited (CAD),Open AR (CAD),Bank Reference,Driver Cost (CAD),Gross Margin,Margin %,Status,Notes";
     const body = rows.map(r=>{
       const gm = r.invoiceAmt - r.driverCost;
       const pct = r.invoiceAmt>0 ? ((gm/r.invoiceAmt)*100).toFixed(1) : "N/A";
-      return `${r.id},${r.customer},${r.invoiceAmt},${r.driverCost},${gm},${pct}%,${sm[r.status].labelEn},"${r.note||""}"`;
+      return `${r.id},${r.customer},${r.invoiceAmt},${r.depositedAmt ?? ""},${r.openAmt ?? ""},${r.bankReference ?? ""},${r.driverCost},${gm},${pct}%,${sm[r.status].labelEn},"${r.note||""}"`;
     }).join("\n");
     const blob = new Blob([header+"\n"+body],{type:"text/csv"});
     const url = URL.createObjectURL(blob);
@@ -138,6 +174,7 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
           { label:pick(language, "应收开票总额", "Total Billed (AR)"),   value:`CAD $${totalAR.toLocaleString()}`,  icon:DollarSign,    color:"var(--primary)", bg:"#eff6ff",  f:"all" },
           { label:pick(language, "司机成本总额", "Total Driver Cost"),   value:`CAD $${totalAP.toLocaleString()}`,  icon:TrendingUp,    color:"#8B5CF6",       bg:"#f3e8ff",  f:"all" },
           { label:pick(language, "净毛利", "Net Margin"),          value:`CAD $${net.toLocaleString()}`,       icon:CheckCircle2,  color:"#047857",       bg:"#d1fae5",  f:"matched" },
+          { label:pick(language, "\u90e8\u5206\u5339\u914d", "Partial Matches"),      value:String(partial),                      icon:AlertTriangle, color:"#b45309",       bg:"#fef3c7",  f:"partial" },
           { label:pick(language, "未匹配项目", "Unmatched Items"),     value:String(unmatched),                    icon:XCircle,       color:"#b91c1c",       bg:"#fee2e2",  f:"unmatched" },
           { label:pick(language, "争议项目", "Disputed Items"),      value:String(disputed),                     icon:AlertTriangle, color:"#b45309",       bg:"#fef3c7",  f:"disputed" },
         ].map(({ label, value, icon: Icon, color, bg, f })=>(
@@ -160,7 +197,7 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
             <div style={{fontSize:11,color:"var(--muted-foreground)"}}>{pick(language, "发票应收与司机应付成本匹配 — CAD", "Invoice AR matched against Driver AP costs — CAD")}</div>
           </div>
           <div className="flex gap-2">
-            {(["all","matched","unmatched","disputed"] as const).map(f=>(
+            {(["all","matched","partial","unmatched","disputed"] as const).map(f=>(
               <button key={f} onClick={()=>setFilter(f)} style={{padding:"4px 12px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",cursor:"pointer",fontWeight:600,background:filter===f?"var(--primary)":"var(--card)",color:filter===f?"#fff":"var(--foreground)"}}>
                 {f==="all"?pick(language, "全部", "All"):(language === "en" ? sm[f]?.labelEn : sm[f]?.label)||f}
               </button>
@@ -172,7 +209,7 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
-            <tr>{(language === "en" ? ["Invoice #","Customer","Invoice (CAD)","Driver Cost","Gross Margin","Margin %","Status","Notes","Actions"] : ["发票号","客户","发票(CAD)","司机成本","毛利","毛利率","状态","备注","操作"]).map(h=><th key={h} style={th}>{h}</th>)}</tr>
+            <tr>{(language === "en" ? ["Invoice #","Customer","Invoice (CAD)","Deposited","Open AR","Bank Ref","Driver Cost","Gross Margin","Margin %","Status","Notes","Actions"] : ["\u53d1\u7968\u53f7","\u5ba2\u6237","\u53d1\u7968(CAD)","\u5df2\u5165\u8d26","\u672a\u6536\u6b3e","\u94f6\u884c\u53c2\u8003","\u53f8\u673a\u6210\u672c","\u6bdb\u5229","\u6bdb\u5229\u7387","\u72b6\u6001","\u5907\u6ce8","\u64cd\u4f5c"]).map(h=><th key={h} style={th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {displayed.map(r=>{
@@ -192,6 +229,13 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
                         style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }} />
                     ) : r.invoiceAmt===0?pick(language, "无发票", "No Invoice"):`$${r.invoiceAmt.toLocaleString()}`}
                   </td>
+                  <td style={{...td,fontFamily:"monospace",fontWeight:700,color:(r.depositedAmt ?? 0)>0?"#047857":"var(--muted-foreground)"}}>
+                    {r.depositedAmt === undefined ? "—" : `$${Number(r.depositedAmt).toLocaleString()}`}
+                  </td>
+                  <td style={{...td,fontFamily:"monospace",fontWeight:700,color:(r.openAmt ?? 0)>0?"#b45309":"#047857"}}>
+                    {r.openAmt === undefined ? "—" : `$${Number(r.openAmt).toLocaleString()}`}
+                  </td>
+                  <td style={{...td,fontFamily:"monospace",color:"var(--muted-foreground)"}}>{r.bankReference ?? "\u2014"}</td>
                   <td style={{...td,fontFamily:"monospace",color:"#8B5CF6"}}>
                     {editing ? (
                       <input type="number" min="0" value={draft.driverCost} onChange={event => setDraft(current => ({ ...current, driverCost: event.target.value }))}
@@ -210,7 +254,7 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
                       <select value={draft.status} onChange={event => setDraft(current => ({ ...current, status: event.target.value as RecStatus }))}
                         className="rounded-md border px-2 py-1 text-xs outline-none"
                         style={{ borderColor: "var(--border)", background: "var(--input-background)", color: "var(--foreground)" }}>
-                        {(["matched", "unmatched", "disputed"] as const).map(status => <option key={status} value={status}>{language === "en" ? sm[status].labelEn : sm[status].label}</option>)}
+                        {(["matched", "partial", "unmatched", "disputed"] as const).map(status => <option key={status} value={status}>{language === "en" ? sm[status].labelEn : sm[status].label}</option>)}
                       </select>
                     ) : (
                       <span style={{background:s.bg,color:s.color,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:600}}>{language === "en" ? s.labelEn : s.label}</span>
@@ -233,8 +277,14 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
                       <button onClick={()=>startEdit(r)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer",fontWeight:600}}>{pick(language, "编辑", "Edit")}</button>
                       {r.status==="unmatched" && <>
                         <button onClick={()=>matchRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "匹配", "Match")}</button>
+                        <button onClick={()=>partialRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>{pick(language, "\u90e8\u5206", "Partial")}</button>
                         <button onClick={()=>disputeRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>{pick(language, "争议", "Dispute")}</button>
                         <button onClick={()=>writeOffRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>{pick(language, "核销", "Write-off")}</button>
+                      </>}
+                      {r.status==="partial" && <>
+                        <button onClick={()=>matchRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "\u5b8c\u6210\u5339\u914d", "Complete")}</button>
+                        <button onClick={()=>disputeRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#fef3c7",color:"#b45309",cursor:"pointer",fontWeight:700}}>{pick(language, "\u4e89\u8bae", "Dispute")}</button>
+                        <button onClick={()=>writeOffRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"1px solid var(--border)",background:"var(--card)",color:"var(--muted-foreground)",cursor:"pointer"}}>{pick(language, "\u6838\u9500", "Write-off")}</button>
                       </>}
                       {r.status==="disputed" && <>
                         <button onClick={()=>resolveRow(r.id)} style={{padding:"3px 8px",borderRadius:6,fontSize:11,border:"none",background:"#d1fae5",color:"#047857",cursor:"pointer",fontWeight:700}}>{pick(language, "解决", "Resolve")}</button>

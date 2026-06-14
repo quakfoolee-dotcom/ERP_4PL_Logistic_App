@@ -473,20 +473,31 @@ export function mergeFinanceProjectionWithOrderToCash(projection: FinanceProject
   });
 
   const reconciliationRows: ReconciliationRow[] = snapshot.invoices.map((invoice) => {
-    const invoiceAmt = Math.round(totalCad(invoice));
+    const invoiceTotal = totalCad(invoice);
+    const invoiceAmt = Math.round(invoiceTotal);
     const driverCost = Math.round(invoice.invoiceAmountCad * 0.35);
+    const payments = snapshot.payments.filter((payment) => payment.invoiceId === invoice.id);
+    const deposits = snapshot.bankDeposits.filter((deposit) => deposit.invoiceId === invoice.id);
+    const depositedAmount = payments.reduce((sum, payment) => sum + payment.amountCad, 0);
+    const openAmount = Math.max(0, invoiceTotal - depositedAmount);
+    const latestDeposit = deposits[0];
     const status = invoice.reconciliationStatus === "completed"
       ? "matched"
       : invoice.reconciliationStatus === "exception" || invoice.collectionStatus === "exception"
         ? "disputed"
-        : invoice.invoiceAmountCad <= 0
-          ? "unmatched"
-          : "matched";
+        : depositedAmount > 0 && openAmount > 0
+          ? "partial"
+          : depositedAmount > 0 && openAmount === 0
+            ? "matched"
+            : "unmatched";
     return {
       id: invoice.invoiceId,
       customer: customerName(snapshot, invoice.customerId),
       invoiceAmt,
       driverCost,
+      depositedAmt: Math.round(depositedAmount),
+      openAmt: Math.round(openAmount),
+      bankReference: latestDeposit?.reference ?? payments.find((payment) => payment.bankReference)?.bankReference,
       status,
       note: invoice.notes,
     };

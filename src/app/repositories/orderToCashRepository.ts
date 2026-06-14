@@ -1,5 +1,6 @@
 import type {
   ARCollection,
+  BankDeposit,
   CarrierShipment,
   Customer,
   CustomerOrder,
@@ -45,6 +46,7 @@ export interface OrderToCashCustomerGraph {
   returnRecords: ReturnRecord[];
   invoices: Invoice[];
   payments: Payment[];
+  bankDeposits: BankDeposit[];
   arCollections: ARCollection[];
   exceptionCases: ExceptionCase[];
   documents: DocumentLink[];
@@ -64,6 +66,7 @@ export interface OrderToCashShipmentGraph {
   deliveryRecords: DeliveryRecord[];
   returnRecords: ReturnRecord[];
   invoices: Invoice[];
+  bankDeposits: BankDeposit[];
   exceptionCases: ExceptionCase[];
   documents: DocumentLink[];
   timelineEvents: TimelineEvent[];
@@ -99,6 +102,10 @@ export interface OrderToCashRepository {
   issueInvoiceFromBillingQueue(input: BillingInvoiceInput): Invoice;
   updateInvoiceFinanceStatus(invoiceId: string, status: InvoiceFinanceStatus, note?: string): Invoice | null;
   markInvoicePaymentReceived(invoiceId: string, method?: PaymentMethod): Invoice | null;
+  matchInvoiceBankDeposit(invoiceId: string, input?: BankDepositMatchInput): Invoice | null;
+  markInvoicePartialPayment(invoiceId: string, amountCad: number, reference?: string): Invoice | null;
+  writeOffInvoiceBalance(invoiceId: string, note?: string): Invoice | null;
+  disputeInvoiceCollection(invoiceId: string, reason: string): Invoice | null;
 }
 
 export interface CreateCustomerLeadInput {
@@ -170,6 +177,16 @@ export interface BillingInvoiceInput {
 }
 
 export type InvoiceFinanceStatus = "pending" | "issued" | "paid" | "overdue";
+export type PaymentMethod = Payment["paymentMethod"];
+
+export interface BankDepositMatchInput {
+  amountCad?: number;
+  reference?: string;
+  method?: PaymentMethod;
+  receivedDate?: string;
+  bankAccount?: string;
+  memo?: string;
+}
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -252,6 +269,7 @@ function normalizeState(saved: Partial<OrderToCashSeedData>, seedData: OrderToCa
     returnRecords: mergeById(seedData.returnRecords, saved.returnRecords),
     invoices: mergeById(seedData.invoices, saved.invoices),
     payments: mergeById(seedData.payments, saved.payments),
+    bankDeposits: mergeById(seedData.bankDeposits, saved.bankDeposits),
     arCollections: mergeById(seedData.arCollections, saved.arCollections),
     exceptionCases: mergeById(seedData.exceptionCases, saved.exceptionCases),
     documents: mergeById(seedData.documents, saved.documents),
@@ -372,6 +390,20 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
     if (status === "overdue") return "overdue";
     if (status === "issued") return "submitted";
     return "draft";
+  }
+
+  function invoiceTotalCad(invoice: Invoice) {
+    return money(invoice.invoiceAmountCad + invoice.taxCad);
+  }
+
+  function paidAmountForInvoice(invoiceId: string) {
+    return money(state.payments
+      .filter((payment) => payment.invoiceId === invoiceId)
+      .reduce((sum, payment) => sum + payment.amountCad, 0));
+  }
+
+  function openAmountForInvoice(invoice: Invoice, nextPaymentAmount = 0) {
+    return Math.max(0, money(invoiceTotalCad(invoice) - paidAmountForInvoice(invoice.id) - nextPaymentAmount));
   }
 
   return {
@@ -982,6 +1014,7 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
       const invoices = state.invoices.filter((invoice) => invoice.customerId === customer.customerId);
       const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
       const payments = state.payments.filter((payment) => invoiceIds.has(payment.invoiceId) || payment.customerId === customer.customerId);
+      const bankDeposits = state.bankDeposits.filter((deposit) => deposit.invoiceId !== undefined && invoiceIds.has(deposit.invoiceId) || deposit.customerId === customer.customerId);
       const arCollections = state.arCollections.filter((collection) => invoiceIds.has(collection.invoiceId) || collection.customerId === customer.customerId);
       const exceptionCases = state.exceptionCases.filter((exceptionCase) => exceptionCase.customerId === customer.customerId);
 
@@ -1001,6 +1034,7 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
         returnRecords,
         invoices,
         payments,
+        bankDeposits,
         arCollections,
         exceptionCases,
       ].forEach((records) => appendEntityIds(ownerIds, records));
@@ -1048,6 +1082,8 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
       const deliveryRecords = state.deliveryRecords.filter((delivery) => orderIds.has(delivery.orderId));
       const returnRecords = state.returnRecords.filter((returnRecord) => orderIds.has(returnRecord.orderId));
       const invoices = state.invoices.filter((invoice) => invoice.relatedShipmentIds.includes(shipment.id) || invoice.relatedOrderIds.some((orderId) => orderIds.has(orderId)));
+      const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
+      const bankDeposits = state.bankDeposits.filter((deposit) => deposit.invoiceId !== undefined && invoiceIds.has(deposit.invoiceId));
       const exceptionCases = state.exceptionCases.filter(
         (exceptionCase) => exceptionCase.relatedShipmentId === shipment.id || exceptionCase.relatedOrderId !== undefined && orderIds.has(exceptionCase.relatedOrderId) || hasRelation(exceptionCase, "shipment", shipment.id),
       );
@@ -1065,6 +1101,7 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
         deliveryRecords,
         returnRecords,
         invoices,
+        bankDeposits,
         exceptionCases,
       ].forEach((records) => appendEntityIds(ownerIds, records));
 
@@ -1428,6 +1465,9 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
       if (!invoice) return null;
       const receivedDate = today();
       const paymentId = `pay-${invoice.invoiceId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+      const depositId = `dep-${invoice.invoiceId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+      const reference = `BANK-${invoice.invoiceId}`;
+      const amountCad = invoiceTotalCad(invoice);
       const payment: Payment = {
         id: paymentId,
         customerId: invoice.customerId,
@@ -1441,10 +1481,34 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
         relatedRecords: [{ type: "invoice", id: invoice.id }],
         invoiceId: invoice.id,
         paymentMethod: method,
-        amountCad: invoice.invoiceAmountCad + invoice.taxCad,
+        amountCad,
         receivedDate,
         clearedDate: receivedDate,
         paymentClearedStatus: "completed",
+        bankDepositId: depositId,
+        bankReference: reference,
+      };
+      const deposit: BankDeposit = {
+        id: depositId,
+        customerId: invoice.customerId,
+        status: "completed",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: receivedDate,
+        updatedDate: receivedDate,
+        notes: `Bank deposit matched to invoice ${invoice.invoiceId}.`,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        depositId: reference,
+        bankAccount: "Operating CAD",
+        invoiceId: invoice.id,
+        amountCad,
+        receivedDate,
+        reference,
+        memo: "Matched from AR payment action.",
+        matchStatus: "matched",
+        matchedAmountCad: amountCad,
+        openAmountCad: 0,
       };
       const nextInvoice: Invoice = {
         ...invoice,
@@ -1471,6 +1535,9 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
         payments: state.payments.some((item) => item.id === payment.id)
           ? state.payments.map((item) => item.id === payment.id ? payment : item)
           : [payment, ...state.payments],
+        bankDeposits: state.bankDeposits.some((item) => item.id === deposit.id)
+          ? state.bankDeposits.map((item) => item.id === deposit.id ? deposit : item)
+          : [deposit, ...state.bankDeposits],
         arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
           ...item,
           status: "completed",
@@ -1478,6 +1545,183 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
           updatedDate: receivedDate,
           lastContactDate: receivedDate,
           notes: "Payment received and collection closed.",
+        } : item),
+      });
+      return clone(nextInvoice);
+    },
+
+    matchInvoiceBankDeposit(invoiceId, input = {}) {
+      const invoice = invoiceByPublicId(invoiceId);
+      if (!invoice) return null;
+      const receivedDate = input.receivedDate ?? today();
+      const reference = input.reference?.trim() || `BANK-${invoice.invoiceId}`;
+      const existingOpen = openAmountForInvoice(invoice);
+      const amountCad = money(input.amountCad ?? (existingOpen > 0 ? existingOpen : invoiceTotalCad(invoice)));
+      const openAmountCad = openAmountForInvoice(invoice, amountCad);
+      const isPartial = openAmountCad > 0;
+      const depositSlug = slugify(`${invoice.invoiceId}-${reference}`);
+      const depositId = `dep-${depositSlug}`;
+      const paymentId = `pay-${depositSlug}`;
+      const payment: Payment = {
+        id: paymentId,
+        customerId: invoice.customerId,
+        status: isPartial ? "submitted" : "completed",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: receivedDate,
+        updatedDate: receivedDate,
+        notes: isPartial ? `Partial bank deposit matched to invoice ${invoice.invoiceId}.` : `Bank deposit matched to invoice ${invoice.invoiceId}.`,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        invoiceId: invoice.id,
+        paymentMethod: input.method ?? "eft",
+        amountCad,
+        receivedDate,
+        clearedDate: isPartial ? undefined : receivedDate,
+        paymentClearedStatus: isPartial ? "pending_review" : "completed",
+        bankDepositId: depositId,
+        bankReference: reference,
+      };
+      const deposit: BankDeposit = {
+        id: depositId,
+        customerId: invoice.customerId,
+        status: isPartial ? "pending_review" : "completed",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: receivedDate,
+        updatedDate: receivedDate,
+        notes: input.memo ?? payment.notes,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        depositId: reference,
+        bankAccount: input.bankAccount ?? "Operating CAD",
+        invoiceId: invoice.id,
+        amountCad,
+        receivedDate,
+        reference,
+        memo: input.memo,
+        matchStatus: isPartial ? "partial" : "matched",
+        matchedAmountCad: amountCad,
+        openAmountCad,
+      };
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: isPartial ? "pending_review" : "completed",
+        updatedDate: receivedDate,
+        paymentMethod: input.method ?? "eft",
+        paymentReceivedDate: receivedDate,
+        paymentClearedStatus: isPartial ? "pending_review" : "completed",
+        collectionStatus: isPartial ? "in_progress" : "completed",
+        reconciliationStatus: isPartial ? "pending_review" : "completed",
+        notes: isPartial
+          ? `Partial payment CAD $${amountCad.toLocaleString("en-CA")} matched; CAD $${openAmountCad.toLocaleString("en-CA")} remains open.`
+          : `Bank deposit ${reference} matched and reconciled on ${receivedDate}.`,
+      };
+      appendTimeline("invoice", invoice.id, {
+        stage: "Bank Reconciliation",
+        status: isPartial ? "pending_review" : "completed",
+        title: isPartial ? `Partial deposit matched for ${invoice.invoiceId}` : `Bank deposit matched for ${invoice.invoiceId}`,
+        note: `${reference}: CAD $${amountCad.toLocaleString("en-CA")} matched${isPartial ? `, CAD $${openAmountCad.toLocaleString("en-CA")} open` : ""}.`,
+        actor: "Finance",
+        level: isPartial ? "warning" : "success",
+      });
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        payments: state.payments.some((item) => item.id === payment.id)
+          ? state.payments.map((item) => item.id === payment.id ? payment : item)
+          : [payment, ...state.payments],
+        bankDeposits: state.bankDeposits.some((item) => item.id === deposit.id)
+          ? state.bankDeposits.map((item) => item.id === deposit.id ? deposit : item)
+          : [deposit, ...state.bankDeposits],
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: isPartial ? "pending_review" : "completed",
+          collectionStatus: isPartial ? "in_progress" : "completed",
+          updatedDate: receivedDate,
+          lastContactDate: receivedDate,
+          notes: nextInvoice.notes,
+        } : item),
+      });
+      return clone(nextInvoice);
+    },
+
+    markInvoicePartialPayment(invoiceId, amountCad, reference) {
+      if (!Number.isFinite(amountCad) || amountCad <= 0) return null;
+      return this.matchInvoiceBankDeposit(invoiceId, {
+        amountCad,
+        reference: reference || `PARTIAL-${invoiceId}`,
+        memo: "Partial bank deposit matched; remaining balance remains open.",
+      });
+    },
+
+    writeOffInvoiceBalance(invoiceId, note) {
+      const invoice = invoiceByPublicId(invoiceId);
+      if (!invoice) return null;
+      const updatedDate = today();
+      const paidAmount = paidAmountForInvoice(invoice.id);
+      const openAmount = openAmountForInvoice(invoice);
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: "completed",
+        updatedDate,
+        paymentClearedStatus: paidAmount > 0 ? "completed" : invoice.paymentClearedStatus,
+        collectionStatus: "completed",
+        reconciliationStatus: "completed",
+        notes: note || `Remaining balance CAD $${openAmount.toLocaleString("en-CA")} written off on ${updatedDate}.`,
+      };
+      appendTimeline("invoice", invoice.id, {
+        stage: "Bank Reconciliation",
+        status: "completed",
+        title: `Balance written off for ${invoice.invoiceId}`,
+        note: nextInvoice.notes ?? "Balance written off.",
+        actor: "Finance",
+        level: "warning",
+      });
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: "completed",
+          collectionStatus: "completed",
+          updatedDate,
+          notes: nextInvoice.notes,
+        } : item),
+      });
+      return clone(nextInvoice);
+    },
+
+    disputeInvoiceCollection(invoiceId, reason) {
+      const invoice = invoiceByPublicId(invoiceId);
+      const cleanReason = reason.trim();
+      if (!invoice || !cleanReason) return null;
+      const updatedDate = today();
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: "exception",
+        updatedDate,
+        collectionStatus: "exception",
+        reconciliationStatus: "exception",
+        notes: cleanReason,
+      };
+      appendTimeline("invoice", invoice.id, {
+        stage: "Bank Reconciliation",
+        status: "exception",
+        title: `Collection dispute opened for ${invoice.invoiceId}`,
+        note: cleanReason,
+        actor: "Finance",
+        level: "error",
+      });
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: "exception",
+          collectionStatus: "exception",
+          updatedDate,
+          notes: cleanReason,
         } : item),
       });
       return clone(nextInvoice);
