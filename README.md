@@ -46,6 +46,8 @@ The main customer-to-cash flow is now partially connected end to end:
 8. Live Tracking reads workflow dispatch records and can advance in-transit dispatches to POD pending.
 9. POD Management reads POD-pending dispatches and confirms POD against the same dispatch record.
 10. Finance Hub receives handling and transport billing queue items, including blocked POD items and ready-to-invoice items.
+11. Finance Hub can issue a billing queue item into an AR invoice and QuickBooks sync staging row.
+12. AR Invoices can mark payment received, which updates payment and reconciliation state.
 
 Latest verified handoff:
 
@@ -55,6 +57,8 @@ TMS Start Transit -> Live Tracking In Transit
 Live Tracking Move to POD -> POD Management Pending
 POD Confirm -> Finance Hub billing queue Ready
 Finance queue item: BQ-INV-ASN-2026-07-04-RW0D
+Finance Invoice -> AR invoice INV-ASN-2026-07-04-RW0D
+AR Paid -> Reconciliation Matched
 ```
 
 ## Key Files
@@ -100,10 +104,10 @@ docs/HANDOFF.md
 
 ## Recommended Next Work
 
-Next process gap: connect Finance `Ready` billing items into invoice issue, QuickBooks/accounting sync, AR reconciliation, and payment status.
+Next process gap: deepen accounting sync and bank reconciliation after invoice/payment.
 
 Target flow:
 
 ```text
-Finance Hub Ready -> Issue Invoice -> Accounting Sync Ready -> Sync Complete -> AR Paid/Reconciled
+Accounting Sync Ready -> Sync Failed/Retried/Synced -> Bank Deposit Match -> Dashboard Cash KPIs
 ```

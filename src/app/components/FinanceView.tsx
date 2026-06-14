@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -9,6 +9,8 @@ import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
 import type { FinanceStatusKey } from "../domain/financeProjection";
 import { getFinanceProjection, getFinanceSummary } from "../repositories/projections";
+import { orderToCashRepository } from "../repositories/orderToCashRepository";
+import { useOrderToCashSnapshot } from "./BackboneTracePanel";
 
 type FinanceSection = "finance" | "ar" | "ap" | "transfer";
 type StatusKey = FinanceStatusKey;
@@ -36,6 +38,9 @@ type PayableRow = (typeof payables)[number];
 type TransferRow = (typeof transfers)[number];
 
 export function FinanceView({ section = "finance", language = "zh" }: { section?: FinanceSection; language?: AppLanguage }) {
+  const orderToCashSnapshot = useOrderToCashSnapshot();
+  const liveFinanceProjection = useMemo(() => getFinanceProjection(), [orderToCashSnapshot]);
+  const liveFinanceSummary = useMemo(() => getFinanceSummary(), [orderToCashSnapshot]);
   const [invoiceRows, setInvoiceRows] = useState(invoices);
   const [payableRows] = useState(payables);
   const [transferRows, setTransferRows] = useState(transfers);
@@ -46,6 +51,10 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   const [selectedTransfer, setSelectedTransfer] = useState<TransferRow | null>(null);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
 
+  useEffect(() => {
+    setInvoiceRows(liveFinanceProjection.invoices);
+  }, [liveFinanceProjection.invoices]);
+
   function invoiceStatus(invoice: InvoiceRow) {
     return invoiceStatuses[invoice.id] ?? invoice.status;
   }
@@ -55,6 +64,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   }
 
   function issue(id: string) {
+    orderToCashRepository.updateInvoiceFinanceStatus(id, "issued", `Invoice ${id} issued from AR screen.`);
     setInvoiceStatuses((previous) => ({ ...previous, [id]: "issued" }));
   }
 
@@ -63,6 +73,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
     let count = 0;
     invoiceRows.forEach((invoice) => {
       if (invoiceStatus(invoice) === "pending") {
+        orderToCashRepository.updateInvoiceFinanceStatus(invoice.id, "issued", `Invoice ${invoice.id} issued from AR batch action.`);
         updates[invoice.id] = "issued";
         count += 1;
       }
@@ -77,6 +88,9 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   }
 
   function updateInvoiceStatus(id: string, status: StatusKey) {
+    if (status === "pending" || status === "issued" || status === "paid" || status === "overdue") {
+      orderToCashRepository.updateInvoiceFinanceStatus(id, status, `Invoice ${id} changed to ${status}.`);
+    }
     setInvoiceStatuses((previous) => ({ ...previous, [id]: status }));
     toast.success(pick(language, "发票状态已更新", "Invoice status updated"));
   }
@@ -168,7 +182,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
       {selectedTransfer && <TransferDetailModal transfer={selectedTransfer} language={language} onClose={() => setSelectedTransfer(null)} onSettle={() => { markTransferSettled(selectedTransfer.id); setSelectedTransfer(null); }} />}
       {showNewInvoice && <NewInvoiceModal language={language} onClose={() => setShowNewInvoice(false)} onCreate={createInvoice} />}
 
-      {section === "finance" && <FinanceOverview language={language} />}
+      {section === "finance" && <FinanceOverview language={language} summary={liveFinanceSummary} />}
       {section === "ar" && (
         <ARInvoices
           language={language}
@@ -206,16 +220,16 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   );
 }
 
-function FinanceOverview({ language }: { language: AppLanguage }) {
+function FinanceOverview({ language, summary = financeSummary }: { language: AppLanguage; summary?: typeof financeSummary }) {
   return (
     <>
       <KpiGrid
         items={[
-          { label: pick(language, "应收总额", "Total AR"), value: "CAD $62.4K", color: "#1C64F2" },
-          { label: pick(language, "应付总额", "Total AP"), value: "CAD $42.1K", color: "#8B5CF6" },
-          { label: pick(language, "已收款", "Collected"), value: "CAD $48.7K", color: "#10B981" },
-          { label: pick(language, "待开发票", "Pending Invoices"), value: "4", color: "#F59E0B" },
-          { label: pick(language, "逾期账款", "Overdue"), value: "CAD $3,352", color: "#EF4444" },
+          { label: pick(language, "应收总额", "Total AR"), value: summary.totalAr, color: "#1C64F2" },
+          { label: pick(language, "应付总额", "Total AP"), value: summary.totalAp, color: "#8B5CF6" },
+          { label: pick(language, "已收款", "Collected"), value: summary.collected, color: "#10B981" },
+          { label: pick(language, "待开发票", "Pending Invoices"), value: summary.pendingInvoices, color: "#F59E0B" },
+          { label: pick(language, "逾期账款", "Overdue"), value: summary.overdue, color: "#EF4444" },
         ]}
       />
 

@@ -1,5 +1,5 @@
 import type { CustomerCaseRecord, CustomerProfileRecord, FreightFileRecord } from "../domain/businessReadiness";
-import type { FinanceInvoiceRow, FinanceProjection, FinanceStatusKey, FinanceTransferRow } from "../domain/financeProjection";
+import type { FinanceInvoiceRow, FinanceProjection, FinanceStatusKey, FinanceTransferRow, ReconciliationRow } from "../domain/financeProjection";
 import type {
   BillingQueueRecord,
   AccountingSyncRecord,
@@ -466,7 +466,27 @@ export function mergeFinanceProjectionWithOrderToCash(projection: FinanceProject
       cost: cad(cost),
       margin: cad(revenue - cost),
       status: statusToFinance(order.status),
-      settled: order.status === "completed" ? order.updatedDate : "Pending",
+    settled: order.status === "completed" ? order.updatedDate : "Pending",
+    };
+  });
+
+  const reconciliationRows: ReconciliationRow[] = snapshot.invoices.map((invoice) => {
+    const invoiceAmt = Math.round(totalCad(invoice));
+    const driverCost = Math.round(invoice.invoiceAmountCad * 0.35);
+    const status = invoice.reconciliationStatus === "completed"
+      ? "matched"
+      : invoice.reconciliationStatus === "exception" || invoice.collectionStatus === "exception"
+        ? "disputed"
+        : invoice.invoiceAmountCad <= 0
+          ? "unmatched"
+          : "matched";
+    return {
+      id: invoice.invoiceId,
+      customer: customerName(snapshot, invoice.customerId),
+      invoiceAmt,
+      driverCost,
+      status,
+      note: invoice.notes,
     };
   });
 
@@ -474,5 +494,6 @@ export function mergeFinanceProjectionWithOrderToCash(projection: FinanceProject
     ...projection,
     invoices: mergeById(projection.invoices, invoices),
     transfers: mergeById(projection.transfers, transfers),
+    reconciliationRows: mergeById(projection.reconciliationRows, reconciliationRows),
   };
 }

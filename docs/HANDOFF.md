@@ -22,6 +22,8 @@ Customer / onboarding
 -> Live Tracking
 -> POD Management
 -> Finance Billing Queue
+-> AR Invoice
+-> Payment / Reconciliation
 ```
 
 ## What Was Implemented
@@ -82,7 +84,20 @@ Finance Hub: BQ-INV-ASN-2026-07-04-RW0D -> Ready
 - Added Finance Hub workflow view.
 - Billing queue supports handling and transport source types.
 - Billing item statuses include ready, needs approval, approved, invoiced, and blocked.
-- Accounting sync records exist and can be updated, but the full invoice-to-AR process still needs deeper connection.
+- Finance Hub `Invoice` now creates/updates an order-to-cash AR invoice, invoice PDF document record, AR collection record, and QuickBooks sync staging record.
+- AR Invoices subscribes to the order-to-cash backbone and can mark invoices issued, paid, or overdue.
+- Marking AR as paid creates a payment record and updates invoice collection/reconciliation state.
+- Reconciliation now refreshes from order-to-cash invoice state, so paid invoices can appear as matched rows.
+
+Verified finance-to-cash browser flow:
+
+```text
+Finance Hub: BQ-INV-ASN-2026-07-04-RW0D -> Invoice
+Billing Queue: Invoiced
+Accounting Sync: SYNC-INV-ASN-2026-07-04-RW0D -> Ready to Sync
+AR Invoices: INV-ASN-2026-07-04-RW0D -> Paid
+Reconciliation: INV-ASN-2026-07-04-RW0D -> Matched
+```
 
 ### Bilingual UI
 
@@ -126,20 +141,19 @@ This makes the app backend-ready at the boundary: replace repository storage met
 
 ## Known Gaps
 
-### Finance To Cash Still Needs Completion
+### Finance To Cash Remaining Work
 
 Current gap:
 
 ```text
-Finance Billing Queue Ready
--> Issue AR Invoice
--> QuickBooks/accounting sync
--> Payment received
--> AR reconciliation
--> Cash collected / closed
+QuickBooks/accounting sync
+-> sync failure handling
+-> bank deposit matching
+-> statement-level reconciliation
+-> cash KPI reporting
 ```
 
-Some repository methods exist, such as `issueInvoiceFromBilling` and `updateAccountingSyncStatus`, but the user-facing AR/AP/Transfer Summary screens still need to be wired to the same workflow backbone.
+The invoice issue, AR payment, and basic reconciliation handoff are now wired. Remaining work is deeper accounting behavior: failed sync recovery, bank deposits, partial payments, write-offs against AR, and dashboard cash KPIs.
 
 ### Backend And Auth Not Implemented
 
@@ -167,25 +181,24 @@ The following are modeled but not truly integrated:
 
 ## Next Recommended Implementation
 
-Implement the Finance-to-Cash handoff:
+Implement the accounting and bank reconciliation handoff:
 
-1. In Finance Hub, make `Issue Invoice` create or update an AR invoice record.
-2. Add a visible accounting sync row for the issued invoice.
-3. Wire Accounting Sync `ready_to_sync -> synced` into AR invoice status.
-4. Add AR actions for payment received, dispute, and write-off.
-5. Make Reconciliation consume AR/payment status instead of isolated local table state.
-6. Update dashboard KPIs to calculate from workflow/order-to-cash state, not static projection values.
+1. Make Accounting Sync `ready_to_sync -> synced/failed` visible in AR invoice detail and audit.
+2. Add failed sync retry and manual reference number entry.
+3. Add partial payment, write-off, and dispute actions in AR.
+4. Add bank deposit matching records.
+5. Update dashboard cash KPIs from order-to-cash invoice/payment state.
+6. Replace static AP/Transfer rows with workflow/order-to-cash-backed rows.
 
 Acceptance test for next gap:
 
 ```text
-Finance Hub Ready item
--> click Issue Invoice
--> AR Invoices shows invoice as Issued/Pending Payment
--> Accounting Sync shows QuickBooks ready_to_sync
--> mark sync complete
--> mark payment received
--> Reconciliation row becomes matched/paid
+Invoice has QuickBooks ready_to_sync
+-> mark sync failed
+-> enter retry/manual QuickBooks reference
+-> mark synced
+-> AR detail shows sync complete
+-> dashboard cash KPIs reflect paid/overdue/collected totals
 ```
 
 ## Verification Run

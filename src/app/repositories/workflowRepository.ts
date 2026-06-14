@@ -683,7 +683,17 @@ export const workflowRepository = {
     if (!item) return { ok: false, message: "Billing item not found." };
     if (item.status !== "approved" && item.status !== "ready") return { ok: false, message: "Billing item must be ready or approved before invoice issue." };
     const total = money(item.subtotalCad + item.taxCad);
-    const invoiceId = `INV-${item.id.replace("BQ-", "")}`;
+    const invoiceBase = item.id.replace(/^BQ-/, "");
+    const invoiceId = invoiceBase.startsWith("INV-") ? invoiceBase : `INV-${invoiceBase}`;
+    orderToCashRepository.issueInvoiceFromBillingQueue({
+      queueId: item.id,
+      customer: item.customer,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      subtotalCad: item.subtotalCad,
+      taxCad: item.taxCad,
+      note: item.note,
+    });
     let next: WorkflowSnapshot = {
       ...state,
       billingQueue: mapById(state.billingQueue, id, { status: "invoiced", note: appendNote(item.note, `Invoice ${invoiceId} issued.`) }),

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DollarSign, AlertTriangle, CheckCircle2, TrendingUp, XCircle, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import { pick, type AppLanguage } from "../i18n";
 import type { ReconciliationStatus } from "../domain/financeProjection";
 import { getFinanceProjection } from "../repositories/projections";
+import { useOrderToCashSnapshot } from "./BackboneTracePanel";
 
 type RecStatus = ReconciliationStatus;
 interface RecRow { id: string; customer: string; invoiceAmt: number; driverCost: number; status: RecStatus; note?: string; }
@@ -32,6 +33,8 @@ const th: React.CSSProperties = { background:"var(--muted)", fontSize:11, fontWe
 const td: React.CSSProperties = { padding:"10px 12px", fontSize:12, borderBottom:"1px solid var(--border)" };
 
 export function ReconciliationView({ language }: { language: AppLanguage }) {
+  const orderToCashSnapshot = useOrderToCashSnapshot();
+  const liveRows = useMemo(() => getFinanceProjection().reconciliationRows, [orderToCashSnapshot]);
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
   const [rows, setRows] = useState<RecRow[]>(() => getFinanceProjection().reconciliationRows);
   const [filter, setFilter] = useState<"all"|RecStatus>("all");
@@ -42,6 +45,10 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
     status: "matched",
     note: "",
   });
+
+  useEffect(() => {
+    setRows(liveRows);
+  }, [liveRows]);
 
   const totalAR    = rows.reduce((s,r)=>s+r.invoiceAmt,0);
   const totalAP    = rows.reduce((s,r)=>s+r.driverCost,0);

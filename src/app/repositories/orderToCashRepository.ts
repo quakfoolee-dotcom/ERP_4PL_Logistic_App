@@ -95,6 +95,9 @@ export interface OrderToCashRepository {
   syncDispatchStatus(dispatchId: string, status: WorkflowStatus, note: string): void;
   syncBillingStatus(queueId: string, status: WorkflowStatus, note: string): void;
   syncAccountingSyncStatus(syncId: string, status: IntegrationStatus["syncStatus"], note: string): void;
+  issueInvoiceFromBillingQueue(input: BillingInvoiceInput): Invoice;
+  updateInvoiceFinanceStatus(invoiceId: string, status: InvoiceFinanceStatus, note?: string): Invoice | null;
+  markInvoicePaymentReceived(invoiceId: string, method?: PaymentMethod): Invoice | null;
 }
 
 export interface CreateCustomerLeadInput {
@@ -155,6 +158,18 @@ export interface AsnBackbonePatch {
   varianceResolved?: boolean;
 }
 
+export interface BillingInvoiceInput {
+  queueId: string;
+  customer: string;
+  sourceType: string;
+  sourceId: string;
+  subtotalCad: number;
+  taxCad: number;
+  note: string;
+}
+
+export type InvoiceFinanceStatus = "pending" | "issued" | "paid" | "overdue";
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -165,6 +180,10 @@ function today() {
 
 function nowStamp() {
   return new Date().toLocaleString("en-CA");
+}
+
+function money(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function futureDate(days: number) {
@@ -318,6 +337,26 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
   function invoiceForQueue(queueId: string) {
     const normalized = queueId.replace(/^BQ-/, "");
     return state.invoices.find((invoice) => normalized === invoice.invoiceId || queueId.includes(invoice.invoiceId) || invoice.relatedOrderIds.includes(normalized));
+  }
+
+  function invoiceByPublicId(invoiceId: string) {
+    return state.invoices.find((invoice) => invoice.id === invoiceId || invoice.invoiceId === invoiceId);
+  }
+
+  function customerForName(customerName: string) {
+    return state.customers.find((customer) =>
+      customer.name === customerName ||
+      customer.customerId === customerName ||
+      customer.id === customerName ||
+      customer.name.toLowerCase() === customerName.toLowerCase(),
+    );
+  }
+
+  function invoiceStatusFromFinance(status: InvoiceFinanceStatus): WorkflowStatus {
+    if (status === "paid") return "completed";
+    if (status === "overdue") return "overdue";
+    if (status === "issued") return "submitted";
+    return "draft";
   }
 
   return {
@@ -1228,6 +1267,205 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
           notes: note,
         } : item),
       });
+    },
+
+    issueInvoiceFromBillingQueue(input) {
+      const updatedDate = today();
+      const stamp = nowStamp();
+      const customer = customerForName(input.customer);
+      const dispatchOrder = input.sourceType === "transport" ? orderForDispatch(input.sourceId) : undefined;
+      const invoiceBase = input.queueId.replace(/^BQ-/, "");
+      const invoiceId = invoiceBase.startsWith("INV-") ? invoiceBase : `INV-${invoiceBase}`;
+      const internalId = `inv-${invoiceId.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      const existing = invoiceByPublicId(invoiceId) ?? invoiceForQueue(input.queueId);
+      const subtotalCad = Math.max(0, money(input.subtotalCad));
+      const taxCadValue = Math.max(0, money(input.taxCad));
+      const relatedOrderIds = dispatchOrder ? [dispatchOrder.id] : input.sourceType === "transport" ? [input.sourceId] : [];
+      const relatedShipmentIds = input.sourceType === "customs" || input.sourceType === "handling" || input.sourceType === "storage" ? [input.sourceId] : [];
+      const customerId = customer?.customerId ?? input.customer;
+      const invoice: Invoice = {
+        id: existing?.id ?? internalId,
+        customerId,
+        status: "submitted",
+        owner: existing?.owner ?? "Finance",
+        responsiblePerson: existing?.responsiblePerson ?? "Finance Team",
+        createdDate: existing?.createdDate ?? updatedDate,
+        updatedDate,
+        notes: input.note || `Issued from billing queue ${input.queueId}.`,
+        documentIds: existing?.documentIds ?? [],
+        relatedRecords: [
+          ...(customer ? [{ type: "customer" as const, id: customer.id }] : []),
+          ...(dispatchOrder ? [{ type: "customer_order" as const, id: dispatchOrder.id }] : []),
+        ],
+        invoiceId,
+        relatedShipmentIds: existing?.relatedShipmentIds?.length ? existing.relatedShipmentIds : relatedShipmentIds,
+        relatedOrderIds: existing?.relatedOrderIds?.length ? existing.relatedOrderIds : relatedOrderIds,
+        invoiceType: "transaction_based",
+        invoiceAmountCad: subtotalCad,
+        taxCad: taxCadValue,
+        invoiceDate: updatedDate,
+        dueDate: futureDate(30),
+        paymentMethod: existing?.paymentMethod,
+        paymentReceivedDate: existing?.paymentReceivedDate,
+        paymentClearedStatus: existing?.paymentClearedStatus ?? "pending_review",
+        arAgingBucket: existing?.arAgingBucket ?? "current",
+        collectionStatus: existing?.collectionStatus ?? "in_progress",
+        quickBooksReferenceNumber: existing?.quickBooksReferenceNumber,
+        reconciliationStatus: existing?.reconciliationStatus ?? "pending_review",
+      };
+      const integration: IntegrationStatus = {
+        id: `sync-${invoice.id}-quickbooks`,
+        ownerType: "invoice",
+        ownerId: invoice.id,
+        system: "quickbooks",
+        externalSystemId: invoice.quickBooksReferenceNumber,
+        syncStatus: "queued",
+        manualUpdateFlag: false,
+      };
+      const document: DocumentLink = {
+        id: `doc-${invoice.id}-invoice`,
+        ownerType: "invoice",
+        ownerId: invoice.id,
+        kind: "invoice",
+        fileName: `${invoice.invoiceId}.pdf`,
+        uploadedAt: stamp,
+        uploadedBy: "Finance",
+      };
+      const collection: ARCollection = {
+        id: `arc-${invoice.id}`,
+        customerId,
+        status: "in_progress",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: existing?.createdDate ?? updatedDate,
+        updatedDate,
+        notes: `AR collection opened from ${input.queueId}.`,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        invoiceId: invoice.id,
+        arAgingBucket: invoice.arAgingBucket,
+        collectionStatus: "in_progress",
+        nextFollowUpDate: invoice.dueDate,
+        collectionOwner: "Finance",
+      };
+
+      appendTimeline("invoice", invoice.id, {
+        stage: "Finance",
+        status: "submitted",
+        title: `Invoice ${invoice.invoiceId} issued`,
+        note: `Created from billing queue ${input.queueId}; QuickBooks sync is queued.`,
+        actor: "Finance",
+      });
+      publish({
+        ...state,
+        invoices: existing
+          ? state.invoices.map((item) => item.id === existing.id ? invoice : item)
+          : [invoice, ...state.invoices],
+        integrationStatuses: state.integrationStatuses.some((item) => item.id === integration.id)
+          ? state.integrationStatuses.map((item) => item.id === integration.id ? { ...item, ...integration, syncStatus: item.syncStatus === "synced" ? item.syncStatus : integration.syncStatus } : item)
+          : [integration, ...state.integrationStatuses],
+        documents: state.documents.some((item) => item.id === document.id) ? state.documents : [document, ...state.documents],
+        arCollections: state.arCollections.some((item) => item.id === collection.id)
+          ? state.arCollections.map((item) => item.id === collection.id ? { ...item, updatedDate, collectionStatus: item.collectionStatus === "completed" ? item.collectionStatus : "in_progress" } : item)
+          : [collection, ...state.arCollections],
+      });
+      return clone(invoice);
+    },
+
+    updateInvoiceFinanceStatus(invoiceId, status, note) {
+      const invoice = invoiceByPublicId(invoiceId);
+      if (!invoice) return null;
+      const updatedDate = today();
+      if (status === "paid") return this.markInvoicePaymentReceived(invoice.invoiceId);
+      const workflowStatus = invoiceStatusFromFinance(status);
+      appendTimeline("invoice", invoice.id, {
+        stage: "Finance",
+        status: workflowStatus,
+        title: `Invoice ${invoice.invoiceId} status updated`,
+        note: note ?? `Invoice status changed to ${status}.`,
+        actor: "Finance",
+        level: workflowStatus === "overdue" ? "warning" : "info",
+      });
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: workflowStatus,
+        updatedDate,
+        collectionStatus: workflowStatus === "overdue" ? "overdue" : invoice.collectionStatus,
+        reconciliationStatus: workflowStatus === "overdue" ? "exception" : invoice.reconciliationStatus,
+        notes: note ?? invoice.notes,
+      };
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: workflowStatus === "overdue" ? "overdue" : item.status,
+          collectionStatus: workflowStatus === "overdue" ? "overdue" : item.collectionStatus,
+          updatedDate,
+          notes: note ?? item.notes,
+        } : item),
+      });
+      return clone(nextInvoice);
+    },
+
+    markInvoicePaymentReceived(invoiceId, method = "eft") {
+      const invoice = invoiceByPublicId(invoiceId);
+      if (!invoice) return null;
+      const receivedDate = today();
+      const paymentId = `pay-${invoice.invoiceId.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+      const payment: Payment = {
+        id: paymentId,
+        customerId: invoice.customerId,
+        status: "completed",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: receivedDate,
+        updatedDate: receivedDate,
+        notes: `Payment received for ${invoice.invoiceId}.`,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        invoiceId: invoice.id,
+        paymentMethod: method,
+        amountCad: invoice.invoiceAmountCad + invoice.taxCad,
+        receivedDate,
+        clearedDate: receivedDate,
+        paymentClearedStatus: "completed",
+      };
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: "completed",
+        updatedDate: receivedDate,
+        paymentMethod: method,
+        paymentReceivedDate: receivedDate,
+        paymentClearedStatus: "completed",
+        collectionStatus: "completed",
+        reconciliationStatus: "completed",
+        notes: `Payment received and reconciled on ${receivedDate}.`,
+      };
+      appendTimeline("invoice", invoice.id, {
+        stage: "Cash Collection",
+        status: "completed",
+        title: `Payment received for ${invoice.invoiceId}`,
+        note: `CAD $${payment.amountCad.toLocaleString("en-CA")} received by ${method.replace(/_/g, " ")} and reconciliation marked complete.`,
+        actor: "Finance",
+        level: "success",
+      });
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        payments: state.payments.some((item) => item.id === payment.id)
+          ? state.payments.map((item) => item.id === payment.id ? payment : item)
+          : [payment, ...state.payments],
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: "completed",
+          collectionStatus: "completed",
+          updatedDate: receivedDate,
+          lastContactDate: receivedDate,
+          notes: "Payment received and collection closed.",
+        } : item),
+      });
+      return clone(nextInvoice);
     },
 
     syncAccountingSyncStatus(syncId, status, note) {
