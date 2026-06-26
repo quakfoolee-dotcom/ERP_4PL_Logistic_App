@@ -272,6 +272,13 @@ export interface BankDeposit extends BaseWorkflowEntity {
   matchStatus: "unmatched" | "matched" | "partial" | "exception";
   matchedAmountCad?: number;
   openAmountCad?: number;
+  sourceFileName?: string;
+  statementDate?: string;
+  importedAt?: string;
+  suggestedInvoiceId?: string;
+  suggestionReason?: string;
+  suggestionConfidence?: "high" | "medium" | "low";
+  rejectedInvoiceIds?: string[];
 }
 
 export interface ARCollection extends BaseWorkflowEntity {

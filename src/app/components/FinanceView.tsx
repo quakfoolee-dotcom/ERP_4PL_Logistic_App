@@ -7,7 +7,7 @@ import { AlertCircle, CheckCircle2, Clock, Download, FileText, Send, X } from "l
 import { toast } from "sonner";
 import type { AppLanguage } from "../i18n";
 import { pick } from "../i18n";
-import type { FinanceStatusKey } from "../domain/financeProjection";
+import type { FinanceProjection, FinanceStatusKey } from "../domain/financeProjection";
 import type { IntegrationStatus } from "../domain/orderToCashModels";
 import { getFinanceProjection, getFinanceSummary } from "../repositories/projections";
 import { orderToCashRepository } from "../repositories/orderToCashRepository";
@@ -43,7 +43,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   const liveFinanceProjection = useMemo(() => getFinanceProjection(), [orderToCashSnapshot]);
   const liveFinanceSummary = useMemo(() => getFinanceSummary(), [orderToCashSnapshot]);
   const [invoiceRows, setInvoiceRows] = useState(invoices);
-  const [payableRows] = useState(payables);
+  const [payableRows, setPayableRows] = useState(payables);
   const [transferRows, setTransferRows] = useState(transfers);
   const [invoiceStatuses, setInvoiceStatuses] = useState<Record<string, StatusKey>>({});
   const [payableStatuses, setPayableStatuses] = useState<Record<string, StatusKey>>({});
@@ -54,7 +54,9 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
 
   useEffect(() => {
     setInvoiceRows(liveFinanceProjection.invoices);
-  }, [liveFinanceProjection.invoices]);
+    setPayableRows(liveFinanceProjection.payables);
+    setTransferRows(liveFinanceProjection.transfers);
+  }, [liveFinanceProjection.invoices, liveFinanceProjection.payables, liveFinanceProjection.transfers]);
 
   function invoiceStatus(invoice: InvoiceRow) {
     return invoiceStatuses[invoice.id] ?? invoice.status;
@@ -190,7 +192,7 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
       {selectedTransfer && <TransferDetailModal transfer={selectedTransfer} language={language} onClose={() => setSelectedTransfer(null)} onSettle={() => { markTransferSettled(selectedTransfer.id); setSelectedTransfer(null); }} />}
       {showNewInvoice && <NewInvoiceModal language={language} onClose={() => setShowNewInvoice(false)} onCreate={createInvoice} />}
 
-      {section === "finance" && <FinanceOverview language={language} summary={liveFinanceSummary} />}
+      {section === "finance" && <FinanceOverview language={language} summary={liveFinanceSummary} projection={liveFinanceProjection} />}
       {section === "ar" && (
         <ARInvoices
           language={language}
@@ -228,7 +230,8 @@ export function FinanceView({ section = "finance", language = "zh" }: { section?
   );
 }
 
-function FinanceOverview({ language, summary = financeSummary }: { language: AppLanguage; summary?: typeof financeSummary }) {
+function FinanceOverview({ language, summary = financeSummary, projection = financeProjection }: { language: AppLanguage; summary?: typeof financeSummary; projection?: FinanceProjection }) {
+  void projection;
   return (
     <>
       <KpiGrid
@@ -324,6 +327,15 @@ function ARInvoices({ language, invoices, invoiceStatus, onStatusChange, onIssue
   );
 }
 
+function parseCad(value: string) {
+  return Number(value.replace(/[^0-9.-]/g, "")) || 0;
+}
+
+function compactCad(value: number) {
+  if (Math.abs(value) >= 1000) return `CAD $${(value / 1000).toFixed(Math.abs(value) >= 10000 ? 0 : 1)}K`;
+  return `CAD $${Math.round(value).toLocaleString("en-CA")}`;
+}
+
 function APPayables({ language, payables, payableStatus, onStatusChange, onApprove, onSelectPayable, onExport }: {
   language: AppLanguage;
   payables: PayableRow[];
@@ -333,11 +345,12 @@ function APPayables({ language, payables, payableStatus, onStatusChange, onAppro
   onSelectPayable: (payable: PayableRow) => void;
   onExport: () => void;
 }) {
+  const payableTotal = payables.reduce((sum, payable) => sum + parseCad(payable.total), 0);
   return (
     <>
       <KpiGrid
         items={[
-          { label: pick(language, "应付总额", "Payables Total"), value: "CAD $24.8K", color: "#8B5CF6" },
+          { label: pick(language, "应付总额", "Payables Total"), value: compactCad(payableTotal), color: "#8B5CF6" },
           { label: pick(language, "待批准", "Needs Approval"), value: String(payables.filter((payable) => payableStatus(payable) === "scheduled").length), color: "#F59E0B" },
           { label: pick(language, "已付款", "Paid"), value: String(payables.filter((payable) => payableStatus(payable) === "paid").length), color: "#10B981" },
           { label: pick(language, "逾期", "Overdue"), value: String(payables.filter((payable) => payableStatus(payable) === "overdue").length), color: "#EF4444" },
@@ -383,14 +396,17 @@ function TransferSummary({ language, transfers, onStatusChange, onSelectTransfer
   onSettle: (id: string) => void;
   onExport: () => void;
 }) {
+  const transferRevenue = transfers.reduce((sum, transfer) => sum + parseCad(transfer.revenue), 0);
+  const transferCost = transfers.reduce((sum, transfer) => sum + parseCad(transfer.cost), 0);
+  const transferMargin = transfers.reduce((sum, transfer) => sum + parseCad(transfer.margin), 0);
   return (
     <>
       <KpiGrid
         items={[
-          { label: pick(language, "中转收入", "Transfer Revenue"), value: "CAD $8.9K", color: "#1C64F2" },
-          { label: pick(language, "中转成本", "Transfer Cost"), value: "CAD $6.2K", color: "#8B5CF6" },
-          { label: pick(language, "毛利", "Gross Margin"), value: "CAD $2.7K", color: "#10B981" },
-          { label: pick(language, "待结算", "Pending Settlement"), value: "1", color: "#F59E0B" },
+          { label: pick(language, "中转收入", "Transfer Revenue"), value: compactCad(transferRevenue), color: "#1C64F2" },
+          { label: pick(language, "中转成本", "Transfer Cost"), value: compactCad(transferCost), color: "#8B5CF6" },
+          { label: pick(language, "毛利", "Gross Margin"), value: compactCad(transferMargin), color: "#10B981" },
+          { label: pick(language, "待结算", "Pending Settlement"), value: String(transfers.filter((transfer) => transfer.status === "pending").length), color: "#F59E0B" },
         ]}
       />
 

@@ -69,6 +69,23 @@ export interface ReconciliationRow {
   note?: string;
 }
 
+export interface BankStatementRow {
+  depositId: string;
+  reference: string;
+  customer: string;
+  amountCad: number;
+  receivedDate: string;
+  bankAccount: string;
+  sourceFileName?: string;
+  invoiceId?: string;
+  suggestedInvoiceId?: string;
+  suggestionReason?: string;
+  suggestionConfidence?: "high" | "medium" | "low";
+  status: "unmatched" | "matched" | "partial" | "exception";
+  openAmountCad?: number;
+  memo?: string;
+}
+
 export interface FinanceProjection {
   invoices: FinanceInvoiceRow[];
   payables: FinancePayableRow[];
@@ -76,6 +93,7 @@ export interface FinanceProjection {
   monthlyFlow: MonthlyFlowRow[];
   settlementSummary: SettlementSummaryRow[];
   reconciliationRows: ReconciliationRow[];
+  bankStatementRows: BankStatementRow[];
 }
 
 function organizationName(organizations: Organization[], id: string) {
@@ -238,6 +256,7 @@ export function buildFinanceProjection(data: ErpSeedData): FinanceProjection {
     monthlyFlow,
     settlementSummary,
     reconciliationRows,
+    bankStatementRows: [],
   };
 }
 

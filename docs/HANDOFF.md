@@ -24,6 +24,7 @@ Customer / onboarding
 -> Finance Billing Queue
 -> AR Invoice
 -> Payment / Reconciliation
+-> Bank Statement Import / Match Suggestion
 ```
 
 ## What Was Implemented
@@ -97,6 +98,12 @@ Finance Hub: BQ-INV-ASN-2026-07-04-RW0D -> Ready
   - Write-off closes the remaining AR balance with an audit timeline note.
   - Dispute flags the invoice and AR collection as exception.
 - Finance overview cash KPIs now calculate collected cash from deposited/payment-backed reconciliation rows and show unmatched/partial and disputed cash indicators.
+- Bank statement import now has a frontend workbench in Reconciliation:
+  - Import sample statement rows from open invoices.
+  - Suggest invoice matches by reference, customer, amount, and open balance.
+  - Accept a statement match into payment, bank deposit, AR collection, and invoice reconciliation state.
+  - Reject a suggested match and keep the statement row in manual review.
+- AP Payables and Transfer Summary now refresh from the live finance projection, and their KPI cards calculate from the displayed rows instead of fixed demo values.
 
 Verified finance-to-cash browser flow:
 
@@ -106,6 +113,7 @@ Billing Queue: Invoiced
 Accounting Sync: SYNC-INV-ASN-2026-07-04-RW0D -> Ready to Sync
 Accounting Sync: Fail -> Retry -> QB Ref -> Synced
 Reconciliation: Bank Deposit -> Match / Partial / Write-off / Dispute
+Bank Statement Import: Import -> Suggested Match -> Accept / Reject -> Reconciliation Refresh
 Finance Overview: Collected / Unmatched-Partial / Disputed KPIs refresh from repository state
 ```
 
@@ -175,13 +183,22 @@ Bank deposit matching
 
 The invoice issue, accounting sync actions, AR payment, bank deposit matching, partial payment, write-off, dispute, and basic cash KPI handoff are now wired.
 
-Current gap:
+Completed in this pass:
 
 ```text
 Bank statement import
 -> automatic match suggestion
 -> AP/Transfer workflow-backed rows
--> cash dashboard drilldown
+-> reconciliation refresh
+```
+
+Current gap:
+
+```text
+Production bank-feed/CSV parser
+-> persisted statement import batches
+-> approval permissions
+-> cash dashboard drilldown to persisted payment/deposit rows
 ```
 
 ### Backend And Auth Not Implemented
@@ -210,20 +227,21 @@ The following are modeled but not truly integrated:
 
 ## Next Recommended Implementation
 
-Implement statement import and remaining finance backing data:
+Implement backend-backed statement import and remaining finance controls:
 
-1. Add bank statement import/mock upload rows with source filename, bank account, statement date, and transaction reference.
-2. Auto-suggest invoice matches by customer/reference/amount/date.
-3. Replace static AP/Transfer rows with workflow/order-to-cash-backed rows.
-4. Add cash dashboard drilldowns from KPI cards to underlying invoice/deposit rows.
+1. Replace the sample import button with CSV upload parsing and validation.
+2. Persist statement import batches, source files, and row-level match decisions through the future backend.
+3. Add approval permissions for accepting/rejecting statement matches, AP approvals, and transfer settlements.
+4. Add cash dashboard drilldowns from KPI cards to persisted invoice/deposit/payment rows.
 5. Add backend-ready audit fields for imported bank statement source references.
 
 Acceptance test for next gap:
 
 ```text
-Bank statement row is imported
--> suggested invoice match is shown
--> finance accepts or rejects match
+Bank statement CSV is uploaded
+-> parsed rows are validated
+-> suggested invoice matches are shown
+-> finance accepts or rejects each match
 -> reconciliation row updates matched/partial/exception state
 -> dashboard KPI drills into the exact deposit/payment rows
 ```

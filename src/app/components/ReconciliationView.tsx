@@ -3,7 +3,7 @@ import { DollarSign, AlertTriangle, CheckCircle2, TrendingUp, XCircle, Download 
 import { toast } from "sonner";
 import { useActionDialog } from "./ActionDialog";
 import { pick, type AppLanguage } from "../i18n";
-import type { ReconciliationStatus } from "../domain/financeProjection";
+import type { BankStatementRow, ReconciliationStatus } from "../domain/financeProjection";
 import { getFinanceProjection } from "../repositories/projections";
 import { orderToCashRepository } from "../repositories/orderToCashRepository";
 import { useOrderToCashSnapshot } from "./BackboneTracePanel";
@@ -34,11 +34,99 @@ const card: React.CSSProperties = { background:"var(--card)", borderRadius:12, b
 const th: React.CSSProperties = { background:"var(--muted)", fontSize:11, fontWeight:600, padding:"8px 12px", textAlign:"left", color:"var(--muted-foreground)" };
 const td: React.CSSProperties = { padding:"10px 12px", fontSize:12, borderBottom:"1px solid var(--border)" };
 
+function BankStatementImportPanel({
+  language,
+  rows,
+  onImport,
+  onAccept,
+  onReject,
+}: {
+  language: AppLanguage;
+  rows: BankStatementRow[];
+  onImport: () => void;
+  onAccept: (row: BankStatementRow) => void;
+  onReject: (row: BankStatementRow) => void;
+}) {
+  const activeRows = rows.filter((row) => row.sourceFileName || row.suggestedInvoiceId || row.status !== "matched").slice(0, 6);
+  const statusLabel = (row: BankStatementRow) => {
+    if (row.status === "matched") return pick(language, "\u5df2\u5339\u914d", "Matched");
+    if (row.status === "partial") return pick(language, "\u90e8\u5206\u5339\u914d", "Partial");
+    if (row.status === "exception") return pick(language, "\u9700\u590d\u6838", "Review");
+    return row.suggestedInvoiceId ? pick(language, "\u5efa\u8bae\u5339\u914d", "Suggested") : pick(language, "\u672a\u5339\u914d", "Unmatched");
+  };
+
+  return (
+    <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+      <div className="flex items-center justify-between" style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{pick(language, "\u94f6\u884c\u6d41\u6c34\u5bfc\u5165\u4e0e\u667a\u80fd\u5339\u914d", "Bank Statement Import & Match Suggestions")}</div>
+          <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{pick(language, "\u5bfc\u5165\u94f6\u884c\u6d41\u6c34\uff0c\u6839\u636e\u53c2\u8003\u53f7\u3001\u91d1\u989d\u548c\u5ba2\u6237\u63a8\u8350\u5e94\u6536\u53d1\u7968\u5339\u914d\u3002", "Import statement rows and suggest AR invoice matches by reference, amount, and customer.")}</div>
+        </div>
+        <button onClick={onImport} className="flex items-center gap-1" style={{ padding: "6px 12px", borderRadius: 8, fontSize: 12, border: "none", cursor: "pointer", background: "var(--primary)", color: "#fff", fontWeight: 700 }}>
+          <Download size={13} /> {pick(language, "\u5bfc\u5165\u6d41\u6c34", "Import Statement")}
+        </button>
+      </div>
+      {activeRows.length === 0 ? (
+        <div style={{ padding: 16, fontSize: 12, color: "var(--muted-foreground)" }}>
+          {pick(language, "\u6682\u65e0\u94f6\u884c\u6d41\u6c34\u3002\u70b9\u51fb\u5bfc\u5165\u6d41\u6c34\u4ee5\u751f\u6210\u5f85\u590d\u6838\u5339\u914d\u3002", "No statement rows yet. Import a statement to generate match suggestions.")}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+            <thead>
+              <tr>
+                {(language === "en"
+                  ? ["Reference", "Customer", "Amount", "Received", "Suggested Invoice", "Confidence", "Status", "Source", "Action"]
+                  : ["\u53c2\u8003\u53f7", "\u5ba2\u6237", "\u91d1\u989d", "\u5165\u8d26\u65e5", "\u5efa\u8bae\u53d1\u7968", "\u4fe1\u5fc3", "\u72b6\u6001", "\u6765\u6e90", "\u64cd\u4f5c"]).map((header) => <th key={header} style={th}>{header}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {activeRows.map((row) => (
+                <tr key={row.depositId}>
+                  <td style={{ ...td, fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>{row.reference}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{row.customer}</td>
+                  <td style={{ ...td, fontFamily: "monospace", fontWeight: 800 }}>CAD ${row.amountCad.toLocaleString("en-CA")}</td>
+                  <td style={{ ...td, fontFamily: "monospace", color: "var(--muted-foreground)" }}>{row.receivedDate}</td>
+                  <td style={{ ...td }}>
+                    <div style={{ fontFamily: "monospace", fontWeight: 700 }}>{row.suggestedInvoiceId ?? row.invoiceId ?? "-"}</div>
+                    {row.suggestionReason && <div style={{ color: "var(--muted-foreground)", fontSize: 11, maxWidth: 280 }}>{row.suggestionReason}</div>}
+                  </td>
+                  <td style={td}>{row.suggestionConfidence ?? "-"}</td>
+                  <td style={td}>
+                    <span style={{ borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 700, background: row.status === "matched" ? "#d1fae5" : row.status === "exception" ? "#fee2e2" : "#fef3c7", color: row.status === "matched" ? "#047857" : row.status === "exception" ? "#b91c1c" : "#b45309" }}>
+                      {statusLabel(row)}
+                    </span>
+                  </td>
+                  <td style={{ ...td, color: "var(--muted-foreground)" }}>{row.sourceFileName ?? row.bankAccount}</td>
+                  <td style={td}>
+                    <div className="flex gap-1.5">
+                      {row.suggestedInvoiceId && row.status === "unmatched" && (
+                        <>
+                          <button onClick={() => onAccept(row)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, border: "none", background: "#d1fae5", color: "#047857", cursor: "pointer", fontWeight: 700 }}>{pick(language, "\u63a5\u53d7", "Accept")}</button>
+                          <button onClick={() => onReject(row)} style={{ padding: "3px 8px", borderRadius: 6, fontSize: 11, border: "1px solid var(--border)", background: "var(--card)", color: "var(--muted-foreground)", cursor: "pointer" }}>{pick(language, "\u62d2\u7edd", "Reject")}</button>
+                        </>
+                      )}
+                      {!row.suggestedInvoiceId && <span style={{ fontSize: 11, color: "var(--muted-foreground)" }}>{row.memo ?? "-"}</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ReconciliationView({ language }: { language: AppLanguage }) {
   const orderToCashSnapshot = useOrderToCashSnapshot();
-  const liveRows = useMemo(() => getFinanceProjection().reconciliationRows, [orderToCashSnapshot]);
+  const liveProjection = useMemo(() => getFinanceProjection(), [orderToCashSnapshot]);
+  const liveRows = liveProjection.reconciliationRows;
+  const liveStatementRows = liveProjection.bankStatementRows;
   const { promptDialog, confirmDialog, ActionDialog } = useActionDialog();
   const [rows, setRows] = useState<RecRow[]>(() => getFinanceProjection().reconciliationRows);
+  const [statementRows, setStatementRows] = useState<BankStatementRow[]>(() => getFinanceProjection().bankStatementRows);
   const [filter, setFilter] = useState<"all"|RecStatus>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ invoiceAmt: string; driverCost: string; status: RecStatus; note: string }>({
@@ -50,7 +138,8 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
 
   useEffect(() => {
     setRows(liveRows);
-  }, [liveRows]);
+    setStatementRows(liveStatementRows);
+  }, [liveRows, liveStatementRows]);
 
   const totalAR    = rows.reduce((s,r)=>s+r.invoiceAmt,0);
   const totalAP    = rows.reduce((s,r)=>s+r.driverCost,0);
@@ -62,7 +151,35 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
   const displayed = filter==="all" ? rows : rows.filter(r=>r.status===filter);
 
   function refreshRows() {
-    setRows(getFinanceProjection().reconciliationRows);
+    const projection = getFinanceProjection();
+    setRows(projection.reconciliationRows);
+    setStatementRows(projection.bankStatementRows);
+  }
+
+  function importStatementRows() {
+    const imported = orderToCashRepository.importSampleBankStatementRows();
+    refreshRows();
+    toast.success(imported.length > 0
+      ? pick(language, `${imported.length} \u6761\u94f6\u884c\u6d41\u6c34\u5df2\u5bfc\u5165`, `${imported.length} bank statement row${imported.length > 1 ? "s" : ""} imported`)
+      : pick(language, "\u6ca1\u6709\u53ef\u5bfc\u5165\u7684\u672a\u7ed3\u53d1\u7968\u6d41\u6c34", "No open invoice statement rows to import"));
+  }
+
+  function acceptStatementMatch(row: BankStatementRow) {
+    const invoice = orderToCashRepository.matchBankStatementDeposit(row.depositId, row.suggestedInvoiceId ?? row.invoiceId);
+    refreshRows();
+    if (invoice) toast.success(pick(language, "\u94f6\u884c\u6d41\u6c34\u5df2\u5339\u914d\u5e76\u66f4\u65b0\u5bf9\u8d26", "Bank statement row matched and reconciliation updated"));
+    else toast.error(pick(language, "\u65e0\u6cd5\u5339\u914d\u8be5\u94f6\u884c\u6d41\u6c34", "Unable to match this statement row"));
+  }
+
+  async function rejectStatementMatch(row: BankStatementRow) {
+    const note = await promptDialog(pick(language, "\u62d2\u7edd\u5339\u914d\u539f\u56e0", "Reject Match Reason"), {
+      defaultValue: pick(language, "\u91d1\u989d\u3001\u5ba2\u6237\u6216\u53c2\u8003\u53f7\u9700\u8981\u4eba\u5de5\u590d\u6838\u3002", "Amount, customer, or reference requires manual review."),
+    });
+    if (!note) return;
+    const deposit = orderToCashRepository.rejectBankStatementSuggestion(row.depositId, note);
+    refreshRows();
+    if (deposit) toast.warning(pick(language, "\u5efa\u8bae\u5339\u914d\u5df2\u62d2\u7edd", "Suggested match rejected"));
+    else toast.error(pick(language, "\u627e\u4e0d\u5230\u94f6\u884c\u6d41\u6c34", "Statement row not found"));
   }
 
   function startEdit(row: RecRow) {
@@ -168,6 +285,13 @@ export function ReconciliationView({ language }: { language: AppLanguage }) {
   return (
     <div className="flex-1 overflow-auto p-5" style={{background:"var(--background)"}}>
       <ActionDialog />
+      <BankStatementImportPanel
+        language={language}
+        rows={statementRows}
+        onImport={importStatementRows}
+        onAccept={acceptStatementMatch}
+        onReject={rejectStatementMatch}
+      />
       {/* KPIs — clickable to filter */}
       <div className="flex gap-4 mb-5">
         {[

@@ -50,6 +50,8 @@ The main customer-to-cash flow is now partially connected end to end:
 12. Finance Hub can mark accounting sync rows as failed, retried/ready, synced, and can store an external QuickBooks reference.
 13. AR Invoices can mark payment received, show the invoice's accounting sync status/reference, and update payment/reconciliation state.
 14. Reconciliation can match bank deposits, record partial payments, write off remaining AR balances, and flag disputes against the order-to-cash invoice record.
+15. Reconciliation can import sample bank statement rows, suggest invoice matches, accept matches into payment/deposit state, or reject suggestions for manual review.
+16. AP Payables and Transfer Summary now refresh from the live finance projection and calculate KPI totals from table rows instead of fixed card values.
 
 Latest verified handoff:
 
@@ -63,6 +65,7 @@ Finance Invoice -> AR invoice INV-ASN-2026-07-04-RW0D
 Accounting Sync -> Fail / Retry / QB Ref / Synced
 Bank Deposit -> Match / Partial / Write-off / Dispute
 Reconciliation -> Matched / Partial / Disputed
+Bank Statement Import -> Suggested Invoice Match -> Accept / Reject -> Reconciliation Refresh
 ```
 
 ## Key Files
@@ -108,10 +111,12 @@ docs/HANDOFF.md
 
 ## Recommended Next Work
 
-Next process gap: statement import and AP/transfer data integration.
+Next process gap: backend-backed bank statement/AP/transfer integration.
 
 Target flow:
 
 ```text
-Bank Statement Import -> Auto-suggest Matches -> AP/Transfer Backing Data -> Cash Dashboard Drilldown
+CSV / bank feed import -> match suggestions -> approval queue -> persisted payments/AP transfers -> cash dashboard drilldown
 ```
+
+Current frontend implementation includes the statement import workbench and live projection wiring. The next production step is replacing the sample statement import with a real uploaded CSV/bank-feed parser and persisting imported rows through an API/database.

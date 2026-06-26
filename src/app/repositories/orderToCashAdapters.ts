@@ -1,5 +1,5 @@
 import type { CustomerCaseRecord, CustomerProfileRecord, FreightFileRecord } from "../domain/businessReadiness";
-import type { FinanceInvoiceRow, FinanceProjection, FinanceStatusKey, FinanceTransferRow, ReconciliationRow } from "../domain/financeProjection";
+import type { BankStatementRow, FinanceInvoiceRow, FinanceProjection, FinanceStatusKey, FinanceTransferRow, ReconciliationRow } from "../domain/financeProjection";
 import type {
   BillingQueueRecord,
   AccountingSyncRecord,
@@ -503,10 +503,33 @@ export function mergeFinanceProjectionWithOrderToCash(projection: FinanceProject
     };
   });
 
+  const bankStatementRows: BankStatementRow[] = snapshot.bankDeposits.map((deposit) => {
+    const matchedInvoice = deposit.invoiceId ? snapshot.invoices.find((invoice) => invoice.id === deposit.invoiceId) : undefined;
+    const suggestedInvoice = deposit.suggestedInvoiceId ? snapshot.invoices.find((invoice) => invoice.id === deposit.suggestedInvoiceId) : undefined;
+    const customerId = deposit.customerId ?? matchedInvoice?.customerId ?? suggestedInvoice?.customerId;
+    return {
+      depositId: deposit.id,
+      reference: deposit.reference,
+      customer: customerId ? customerName(snapshot, customerId) : "Unassigned",
+      amountCad: deposit.amountCad,
+      receivedDate: deposit.receivedDate,
+      bankAccount: deposit.bankAccount,
+      sourceFileName: deposit.sourceFileName,
+      invoiceId: matchedInvoice?.invoiceId,
+      suggestedInvoiceId: suggestedInvoice?.invoiceId,
+      suggestionReason: deposit.suggestionReason,
+      suggestionConfidence: deposit.suggestionConfidence,
+      status: deposit.matchStatus,
+      openAmountCad: deposit.openAmountCad,
+      memo: deposit.memo,
+    };
+  });
+
   return {
     ...projection,
     invoices: mergeById(projection.invoices, invoices),
     transfers: mergeById(projection.transfers, transfers),
     reconciliationRows: mergeById(projection.reconciliationRows, reconciliationRows),
+    bankStatementRows: mergeById(projection.bankStatementRows, bankStatementRows),
   };
 }

@@ -106,6 +106,9 @@ export interface OrderToCashRepository {
   markInvoicePartialPayment(invoiceId: string, amountCad: number, reference?: string): Invoice | null;
   writeOffInvoiceBalance(invoiceId: string, note?: string): Invoice | null;
   disputeInvoiceCollection(invoiceId: string, reason: string): Invoice | null;
+  importSampleBankStatementRows(): BankDeposit[];
+  matchBankStatementDeposit(depositId: string, invoiceId?: string): Invoice | null;
+  rejectBankStatementSuggestion(depositId: string, note?: string): BankDeposit | null;
 }
 
 export interface CreateCustomerLeadInput {
@@ -404,6 +407,50 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
 
   function openAmountForInvoice(invoice: Invoice, nextPaymentAmount = 0) {
     return Math.max(0, money(invoiceTotalCad(invoice) - paidAmountForInvoice(invoice.id) - nextPaymentAmount));
+  }
+
+  function statementCandidateInvoices() {
+    return state.invoices
+      .filter((invoice) => openAmountForInvoice(invoice) > 0)
+      .sort((left, right) => left.dueDate.localeCompare(right.dueDate));
+  }
+
+  function bankStatementDepositFor(invoice: Invoice, index: number): BankDeposit {
+    const openAmount = openAmountForInvoice(invoice);
+    const amountCad = index === 1 ? money(Math.max(100, openAmount * 0.55)) : openAmount;
+    const isPartial = amountCad < openAmount;
+    const customer = state.customers.find((item) => item.customerId === invoice.customerId || item.id === invoice.customerId);
+    const receivedDate = today();
+    const reference = `${isPartial ? "PARTIAL" : "BANK"}-${invoice.invoiceId}`;
+    return {
+      id: `stmt-${slugify(`${invoice.invoiceId}-${reference}`)}`,
+      customerId: invoice.customerId,
+      status: "pending_review",
+      owner: "Finance",
+      responsiblePerson: "Finance Team",
+      createdDate: receivedDate,
+      updatedDate: receivedDate,
+      notes: `Imported bank statement row suggested for ${invoice.invoiceId}.`,
+      documentIds: [],
+      relatedRecords: [{ type: "invoice", id: invoice.id }],
+      depositId: reference,
+      bankAccount: "Operating CAD",
+      amountCad,
+      receivedDate,
+      reference,
+      memo: customer ? `Customer deposit from ${customer.name}` : `Customer deposit for ${invoice.invoiceId}`,
+      matchStatus: "unmatched",
+      matchedAmountCad: 0,
+      openAmountCad: amountCad,
+      sourceFileName: "operating-cad-statement-sample.csv",
+      statementDate: receivedDate,
+      importedAt: nowStamp(),
+      suggestedInvoiceId: invoice.id,
+      suggestionReason: isPartial
+        ? `Customer and reference match ${invoice.invoiceId}; amount is partial against the open balance.`
+        : `Reference and amount match the open balance for ${invoice.invoiceId}.`,
+      suggestionConfidence: isPartial ? "medium" : "high",
+    };
   }
 
   return {
@@ -1725,6 +1772,142 @@ export function createOrderToCashRepository(seedData: OrderToCashSeedData = orde
         } : item),
       });
       return clone(nextInvoice);
+    },
+
+    importSampleBankStatementRows() {
+      const candidates = statementCandidateInvoices().slice(0, 3);
+      const importedRows = candidates.map(bankStatementDepositFor);
+      if (importedRows.length === 0) return [];
+      const existingIds = new Set(state.bankDeposits.map((deposit) => deposit.id));
+      const newRows = importedRows.filter((deposit) => !existingIds.has(deposit.id));
+      if (newRows.length === 0) return clone(importedRows);
+      newRows.forEach((deposit) => {
+        appendTimeline("invoice", deposit.suggestedInvoiceId ?? deposit.id, {
+          stage: "Bank Statement Import",
+          status: "pending_review",
+          title: "Bank statement row imported",
+          note: `${deposit.reference}: CAD $${deposit.amountCad.toLocaleString("en-CA")} imported from ${deposit.sourceFileName}.`,
+          actor: "Finance",
+        });
+      });
+      publish({
+        ...state,
+        bankDeposits: [...newRows, ...state.bankDeposits],
+      });
+      return clone(importedRows);
+    },
+
+    matchBankStatementDeposit(depositId, invoiceId) {
+      const deposit = state.bankDeposits.find((item) => item.id === depositId || item.depositId === depositId);
+      if (!deposit) return null;
+      const invoice = invoiceByPublicId(invoiceId ?? deposit.suggestedInvoiceId ?? deposit.invoiceId ?? "");
+      if (!invoice) return null;
+      const receivedDate = deposit.receivedDate || today();
+      const openAmountCad = openAmountForInvoice(invoice, deposit.amountCad);
+      const isPartial = openAmountCad > 0;
+      const payment: Payment = {
+        id: `pay-${deposit.id}`,
+        customerId: invoice.customerId,
+        status: isPartial ? "submitted" : "completed",
+        owner: "Finance",
+        responsiblePerson: "Finance Team",
+        createdDate: receivedDate,
+        updatedDate: receivedDate,
+        notes: isPartial ? `Partial bank statement match for ${invoice.invoiceId}.` : `Bank statement row matched to ${invoice.invoiceId}.`,
+        documentIds: [],
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        invoiceId: invoice.id,
+        paymentMethod: "bank_transfer",
+        amountCad: deposit.amountCad,
+        receivedDate,
+        clearedDate: isPartial ? undefined : receivedDate,
+        paymentClearedStatus: isPartial ? "pending_review" : "completed",
+        bankDepositId: deposit.id,
+        bankReference: deposit.reference,
+      };
+      const nextDeposit: BankDeposit = {
+        ...deposit,
+        customerId: invoice.customerId,
+        invoiceId: invoice.id,
+        status: isPartial ? "pending_review" : "completed",
+        updatedDate: receivedDate,
+        relatedRecords: [{ type: "invoice", id: invoice.id }],
+        matchStatus: isPartial ? "partial" : "matched",
+        matchedAmountCad: deposit.amountCad,
+        openAmountCad,
+        suggestedInvoiceId: undefined,
+        suggestionReason: undefined,
+      };
+      const nextInvoice: Invoice = {
+        ...invoice,
+        status: isPartial ? "pending_review" : "completed",
+        updatedDate: receivedDate,
+        paymentMethod: "bank_transfer",
+        paymentReceivedDate: receivedDate,
+        paymentClearedStatus: isPartial ? "pending_review" : "completed",
+        collectionStatus: isPartial ? "in_progress" : "completed",
+        reconciliationStatus: isPartial ? "pending_review" : "completed",
+        notes: isPartial
+          ? `Bank statement partially matched; CAD $${openAmountCad.toLocaleString("en-CA")} remains open.`
+          : `Bank statement ${deposit.reference} matched and reconciled.`,
+      };
+      appendTimeline("invoice", invoice.id, {
+        stage: "Bank Statement Import",
+        status: isPartial ? "pending_review" : "completed",
+        title: isPartial ? `Partial statement match for ${invoice.invoiceId}` : `Statement row matched for ${invoice.invoiceId}`,
+        note: `${deposit.reference}: CAD $${deposit.amountCad.toLocaleString("en-CA")} accepted from ${deposit.sourceFileName ?? "bank statement"}.`,
+        actor: "Finance",
+        level: isPartial ? "warning" : "success",
+      });
+      publish({
+        ...state,
+        invoices: state.invoices.map((item) => item.id === invoice.id ? nextInvoice : item),
+        payments: state.payments.some((item) => item.id === payment.id)
+          ? state.payments.map((item) => item.id === payment.id ? payment : item)
+          : [payment, ...state.payments],
+        bankDeposits: state.bankDeposits.map((item) => item.id === deposit.id ? nextDeposit : item),
+        arCollections: state.arCollections.map((item) => item.invoiceId === invoice.id ? {
+          ...item,
+          status: isPartial ? "pending_review" : "completed",
+          collectionStatus: isPartial ? "in_progress" : "completed",
+          updatedDate: receivedDate,
+          lastContactDate: receivedDate,
+          notes: nextInvoice.notes,
+        } : item),
+      });
+      return clone(nextInvoice);
+    },
+
+    rejectBankStatementSuggestion(depositId, note) {
+      const deposit = state.bankDeposits.find((item) => item.id === depositId || item.depositId === depositId);
+      if (!deposit) return null;
+      const rejectedInvoiceIds = deposit.suggestedInvoiceId
+        ? Array.from(new Set([...(deposit.rejectedInvoiceIds ?? []), deposit.suggestedInvoiceId]))
+        : deposit.rejectedInvoiceIds;
+      const nextDeposit: BankDeposit = {
+        ...deposit,
+        status: "pending_review",
+        updatedDate: today(),
+        memo: note || "Suggested invoice match rejected; manual review required.",
+        matchStatus: "exception",
+        suggestedInvoiceId: undefined,
+        suggestionReason: undefined,
+        suggestionConfidence: undefined,
+        rejectedInvoiceIds,
+      };
+      appendTimeline("payment", deposit.id, {
+        stage: "Bank Statement Import",
+        status: "exception",
+        title: "Bank statement suggestion rejected",
+        note: nextDeposit.memo ?? "Suggested match rejected.",
+        actor: "Finance",
+        level: "warning",
+      });
+      publish({
+        ...state,
+        bankDeposits: state.bankDeposits.map((item) => item.id === deposit.id ? nextDeposit : item),
+      });
+      return clone(nextDeposit);
     },
 
     syncAccountingSyncStatus(syncId, status, note) {
